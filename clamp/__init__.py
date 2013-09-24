@@ -46,6 +46,8 @@ class SerializableProxyMaker(CustomMaker):
         self.package = package
         self.kwargs = kwargs
         
+        print "superclass=%s, interfaces=%s, className=%s, pythonModuleName=%s, fullProxyName=%s, mapping=%s, package=%s, kwargs=%s" % (superclass, interfaces, className, pythonModuleName, fullProxyName, mapping, package, kwargs)
+
         # FIXME only add serialVersionUID if the class in question
         # actually is (transitively) implementing Serializable
         # (presumably already part of the MRO by time we are called
@@ -57,7 +59,7 @@ class SerializableProxyMaker(CustomMaker):
         CustomMaker.__init__(self, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping)
     
     def doConstants(self):
-        # FIXME eg, self.constants = { "forty-two": (java.lang.Long(42), java.lang.Long.TYPE) }
+        # FIXME eg, self.constants = { "fortytwo": (java.lang.Long(42), java.lang.Long.TYPE) }
         print "Constants", self.constants
         code = self.classfile.addMethod("<clinit>", ProxyCodeHelpers.makeSig("V"), Modifier.STATIC)
         for constant, (value, constant_type) in sorted(self.constants.iteritems()):
@@ -99,7 +101,7 @@ class ClampProxyMaker(object):
     
     def __call__(self, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping):
         """Constructs a usable proxy name that does not depend on ordering"""
-        print "Package proxy for", self.package, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping
+        print "ClampProxyMaker:", self.package, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping
         return SerializableProxyMaker(
             superclass, interfaces, className, pythonModuleName,
             self.package + "." + pythonModuleName + "." + className, mapping,

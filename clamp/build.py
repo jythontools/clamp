@@ -48,13 +48,11 @@ class JarBuilder(object):
                 self.jar.closeEntry()
                 self.created_paths.add(path_parts[:-i])
 
-    def canonical_path_parts(self, package, cls):
-        parts = [package]
-        parts.extend(cls.split("."))
-        return tuple(parts)
+    def canonical_path_parts(self, package, classname):
+        return tuple(classname.split("."))
 
-    def saveBytes(self, package, cls, bytes):
-        path_parts = self.canonical_path_parts(package, cls)
+    def saveBytes(self, package, classname, bytes):
+        path_parts = self.canonical_path_parts(package, classname)
         self.create_ancestry(path_parts)
         entry = JarEntry("/".join(path_parts) + ".class")
         entry.time = self.build_time
