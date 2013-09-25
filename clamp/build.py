@@ -1,6 +1,11 @@
+import setuptools
 import time
-
+from collections import Iterable
+from contextlib import closing
+from distutils.errors import DistutilsOptionError, DistutilsSetupError
 from java.util.jar import Attributes, JarEntry, JarInputStream, JarOutputStream, Manifest
+
+import clamp
 
 
 class JarCopy(object):
@@ -59,3 +64,49 @@ class JarBuilder(object):
         self.jar.putNextEntry(entry)
         self.jar.write(bytes.toByteArray())
         self.jar.closeEntry()
+
+
+def validate_clamp(distribution, keyword, values):
+    print "Validating: ", keyword, values
+    if keyword != "clamp":
+        raise DistutilsSetupError("invalid keyword: {}".format(keyword))
+    try:
+        invalid = []
+        clamped = list(distribution.clamp)
+        for v in clamped:
+            # FIXME test if valid module name too
+            if not isinstance(v, basestring):
+                invalid.append(v)
+        if invalid:
+            raise DistutilsSetupError(
+                "clamp={} is invalid, must be an iterable of importable module names".format(values))
+    except TypeError, ex:
+        print type(ex), ex
+        raise DistutilsSetupError("clamp={} is invalid: {}".format(values, ex))
+    distribution.clamp = clamped
+
+
+class buildjar(setuptools.Command):
+
+    description = "create a jar for all clamped Python classes"
+    user_options = [
+        ("output=",   "o", "output jar (defaults to output.jarpatterns to match (required)"),
+    ]
+
+    def initialize_options(self):
+        metadata = self.distribution.metadata
+        self.output = "{}-{}.jar".format(metadata.get_name(), metadata.get_version())
+
+    def finalize_options(self):
+        # could validate self.output is a valid path FIXME
+        pass
+
+    def run(self):
+        if not self.distribution.clamp:
+            raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
+        with closing(JarBuilder(output_path=self.output)) as builder:
+            clamp.register_builder(builder)
+            for module in self.distribution.clamp:
+                __import__(module)
+
+
