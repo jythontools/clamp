@@ -3,8 +3,9 @@ import os
 import os.path
 
 from java.lang.reflect import Modifier
-from org.python.util import CodegenUtils
+from org.python.core import Py
 from org.python.compiler import CustomMaker, ProxyCodeHelpers
+from org.python.util import CodegenUtils
 
 
 __all__ = ["ClampProxyMaker"]
@@ -33,7 +34,7 @@ class SerializableProxyMaker(CustomMaker):
 
     # NOTE: SerializableProxyMaker is itself a java proxy, but it's not a custom one!
 
-    # TODO support fields, along with property support in Python
+    # TODO support fields in conjunction with property support in Python
 
 # (None, 
 #  array(java.lang.Class, [<type 'java.util.concurrent.Callable'>, <type 'java.io.Serializable'>]),
@@ -48,12 +49,19 @@ class SerializableProxyMaker(CustomMaker):
         
         print "superclass=%s, interfaces=%s, className=%s, pythonModuleName=%s, fullProxyName=%s, mapping=%s, package=%s, kwargs=%s" % (superclass, interfaces, className, pythonModuleName, fullProxyName, mapping, package, kwargs)
 
-        # FIXME only add serialVersionUID if the class in question
-        # actually is (transitively) implementing Serializable
-        # (presumably already part of the MRO by time we are called
-        # here - not certain if visible to this code however)
+        # FIXME break this out
+        is_serializable = False
+        inheritance = list(interfaces)
+        if superclass:
+            inheritance.append(superclass)
+        for cls in inheritance:
+            if issubclass(cls, java.io.Serializable):
+                is_serializable = True
 
-        self.constants = { "serialVersionUID" : (java.lang.Long(1), java.lang.Long.TYPE) }
+        if is_serializable:
+            self.constants = { "serialVersionUID" : (java.lang.Long(1), java.lang.Long.TYPE) }
+        else:
+            self.constants = {}
         if "constants" in kwargs:
             self.constants.update(self.kwargs["constants"])
         CustomMaker.__init__(self, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping)
@@ -79,17 +87,21 @@ class SerializableProxyMaker(CustomMaker):
         global _builder
         print "Entering makeClass", self
         try:
-            # If already defined on CLASSPATH/classloader chain, simply return this class
+            import sys
+            print "sys.path", sys.path
+            # If already defined on sys.path (including CLASSPATH), simply return this class
             # if you need to tune this, derive accordingly from this class or create another CustomMaker
-            cls = java.lang.Class.forName(self.myClass)
-            print "Looked up proxy", self.myClass
+            cls = Py.findClass(self.myClass)
+            print "Looked up proxy", self.myClass, cls
+            if cls is None:
+                raise TypeError("No proxy class")
         except:
             if _builder:
                 print "Calling super...", self.package
                 cls = CustomMaker.makeClass(self)
                 print "Built proxy", self.myClass
             else:
-                raise TypeError("Cannot construct class without a defined builder FIXME better err msg")
+                raise TypeError("FIXME better err msg - Cannot construct class without a defined builder")
         return cls
 
 
