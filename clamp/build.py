@@ -48,6 +48,7 @@ class OutputJar(object):
     # http://stackoverflow.com/questions/1281229/how-to-use-jaroutputstream-to-create-a-jar-file
 
     def __init__(self, jar=None, output_path="output.jar"):
+        # self.manifest = None
         self.output_path = output_path
         if jar is not None:
             self.jar = jar
@@ -56,6 +57,10 @@ class OutputJar(object):
 
         manifest = Manifest()
         manifest.getMainAttributes()[Attributes.Name.MANIFEST_VERSION] = "1.0"
+
+        # FIXME only do this if __run__.py defined, otherwise select "org.python.util.jython"
+        manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.JarRunner"
+
         self.output = open(self.output_path, "wb")
         self.jar = JarOutputStream(self.output, manifest)
         self.created_paths = set()
@@ -82,7 +87,7 @@ class OutputJar(object):
                     if not "duplicate entry" in str(e):
                         print "Problem in creating entry", entry
                         raise
-                self.created_paths.add(path_parts[:-i])
+                self.created_paths.add(ancestor)
 
 
 class JarCopy(OutputJar):
@@ -135,7 +140,7 @@ class JarCopy(OutputJar):
 
     def copy_file(self, relpath, path):
         path_parts = tuple(os.path.split(relpath)[0].split(os.sep))
-        print "Creating", path_parts
+        # print "Creating", path_parts
         self.create_ancestry(path_parts)
         chunk = jarray.zeros(8192, "b")
         with open(path) as f:
@@ -222,7 +227,8 @@ class buildjar(setuptools.Command):
             os.mkdir(jar_dir)
         if self.output_jar_pth:
             jar_pth_path = os.path.join(site.getsitepackages()[0], "jar.pth")
-            paths = sorted((read_jar_pth(jar_pth_path)).items())
+            paths = read_jar_pth(jar_pth_path)
+            print "paths in jar.pth", paths
             paths[self.distribution.metadata.get_name()] = os.path.join("./jars", self.get_jar_name())
             write_jar_pth(jar_pth_path, paths)
         with closing(JarBuilder(output_path=self.output)) as builder:
