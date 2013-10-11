@@ -252,7 +252,7 @@ def find_jython_lib_files():
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
         for filename in filenames:
             path = os.path.join(dirpath, filename)
-            relpath = path[len(root)-3:]
+            relpath = path[len(root)-3:]   # this will of course not work for included directories FIXME bad hack!
             yield relpath, os.path.realpath(path)
 
     # FIXME verify realpath, realpath(dirpath) has not been seen (no cycles!)
