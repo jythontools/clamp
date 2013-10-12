@@ -106,10 +106,10 @@ class JarCopy(OutputJar):
                 if entry is None:
                     break
                 try:
-                    # Cannot simply use old entry because we need
+                    # NB: cannot simply use old entry because we need
                     # to recompute compressed size
-                    output_entry = JarEntry(entry.getName())
-                    # FIXME add timestamp
+                    output_entry = JarEntry(entry.name)
+                    output_entry.time = entry.time
                     self.jar.putNextEntry(output_entry)
                     while True:
                         read = input_jar.read(chunk, 0, 8192)
@@ -146,7 +146,7 @@ class JarCopy(OutputJar):
         with open(path) as f:
             with closing(BufferedInputStream(f)) as bis:
                 output_entry = JarEntry(relpath)
-                # FIXME add timestamp
+                output_entry.time = os.path.getmtime(path) * 1000
                 self.jar.putNextEntry(output_entry)
                 while True:
                     read = bis.read(chunk, 0, 8192)
