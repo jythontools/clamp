@@ -1,3 +1,4 @@
+import argparse
 import glob
 import java
 import setuptools
@@ -193,7 +194,7 @@ def validate_clamp(distribution, keyword, values):
     distribution.clamp = clamped
 
 
-class buildjar(setuptools.Command):
+class build_jar(setuptools.Command):
 
     description = "create a jar for all clamped Python classes for this package"
     user_options = [
@@ -332,7 +333,7 @@ def create_singlejar(output_path, classpath, include, runpy):
                     print "Copy file", pkg_realpath, "to", os.path.join("Lib", pkg_relpath)
                     singlejar.copy_file(pkg_relpath, pkg_realpath)
 
-        if runpy:
+        if runpy and os.path.exists(runpy):
             singlejar.copy_file("__run__.py", runpy)
 
 
@@ -341,7 +342,7 @@ class singlejar(setuptools.Command):
     description = "create a singlejar of all Jython dependencies, including clamped jars"
     user_options = [
         ("output=",    "o",  "write jar to output path"),
-        ("classpath=", "cp", "jars to include in addition to Jython runtime and site-packages jars"),  # FIXME take a list?
+        ("classpath=", None, "jars to include in addition to Jython runtime and site-packages jars"),  # FIXME take a list?
         ("include=",   "i",  "paths to additional Python libraries and other files to include"),  # FIXME ditto, take a list?
         ("runpy=",     "r",  "path to __run__.py to make a runnable jar"),
     ]
@@ -353,20 +354,23 @@ class singlejar(setuptools.Command):
             os.mkdir(jar_dir)
         except OSError:
             pass
-        self.output = os.path.join(jar_dir, "{}-{}-single.jar".format(metadata.get_name(), metadata.get_version()))
+        self.output = os.path.join(os.getcwd(), "{}-{}-single.jar".format(metadata.get_name(), metadata.get_version()))
         self.classpath = []
         self.include = []
-        runpy = os.path.join(os.getcwd(), "__run__.py")
-        if os.path.exists(runpy):
-            self.runpy = runpy
-        else:
-            self.runpy = None
+        self.runpy = os.path.join(os.getcwd(), "__run__.py")
             
     def finalize_options(self):
         # could validate self.output is a valid path FIXME
-        self.classpath = self.classpath.split(":")
+        if self.classpath:
+            self.classpath = self.classpath.split(":")
+        if self.include:
+            self.include = self.include.split(":")
 
     def run(self):
         create_singlejar(self.output, self.classpath, self.include, self.runpy)
 
 
+
+def singlejar_command():
+    print "args", sys.argv
+    clamp.build.create_singlejar("jython-single.jar", [], [], os.path.join(os.getcwd(), "__run__.py"))

@@ -10,13 +10,15 @@ setup(
     packages = find_packages(),
     entry_points = {
         "distutils.commands": [
-            "buildjar = clamp.build:buildjar",
-            # add singlejar command
+            "build_jar = clamp.build:build_jar",
+            "singlejar = clamp.build:singlejar",
         ],
         "distutils.setup_keywords": [
             "clamp = clamp.build:validate_clamp",
         ],
-        # add singlejar script
+        "console_scripts": [
+            "singlejar = clamp.build:singlejar_command",
+        ]
     }
 )
 
