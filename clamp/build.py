@@ -50,18 +50,22 @@ class OutputJar(object):
     # http://stackoverflow.com/questions/1281229/how-to-use-jaroutputstream-to-create-a-jar-file
 
     def __init__(self, jar=None, output_path="output.jar"):
-        # self.manifest = None
         self.output_path = output_path
         if jar is not None:
             self.jar = jar
             self.output = None
             return
+        self.runpy = None
+        self.setup()
 
+    def setup(self):
         manifest = Manifest()
         manifest.getMainAttributes()[Attributes.Name.MANIFEST_VERSION] = "1.0"
-
-        # FIXME only do this if __run__.py defined, otherwise select "org.python.util.jython"
-        manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.JarRunner"
+        if self.runpy and os.path.exists(self.runpy):
+            manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.JarRunner"
+        else:
+            print "No __run__.py defined, so defaulting to Jython command line"
+            manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.jython"
 
         self.output = open(self.output_path, "wb")
         self.jar = JarOutputStream(self.output, manifest)
@@ -79,7 +83,6 @@ class OutputJar(object):
             if ancestor == "/":
                 continue  # FIXME shouldn't need to do this special casing
             if ancestor not in self.created_paths:
-                print "Adding", ancestor
                 entry = JarEntry(ancestor)
                 entry.time = self.build_time
                 try:
@@ -94,9 +97,14 @@ class OutputJar(object):
 
 class JarCopy(OutputJar):
 
-    # FIXME change JarCopy to a better name
-    # if __run__.py defined, set manifest to point to this: org.python.util.JarRunner
-    # http://stackoverflow.com/questions/9689793/cant-execute-jar-file-no-main-manifest-attribute
+    def __init__(self, jar=None, output_path="output.jar", runpy=None):
+        self.output_path = output_path
+        if jar is not None:
+            self.jar = jar
+            self.output = None
+            return
+        self.runpy = runpy
+        self.setup()
 
     def copy_zip_input_stream(self, zip_input_stream):
         """Given a `zip_input_stream`, copy all entries to the output jar"""
@@ -132,7 +140,6 @@ class JarCopy(OutputJar):
                 print "Will only copy jars, not", normed_path
                 next
             if normed_path in seen:
-                print "Ignoring duplicate jar", normed_path
                 next
             seen.add(normed_path)
             print "Copying", normed_path
@@ -262,7 +269,6 @@ def find_jython_lib_files():
         ignore = False
         for pkg in sitepackages:
             if dirpath.startswith(pkg):
-                print "ignoring dirpath", dirpath, sitepackages
                 ignore = True
         if ignore:
             continue
@@ -274,20 +280,6 @@ def find_jython_lib_files():
     # FIXME verify realpath, realpath(dirpath) has not been seen (no cycles!)
 
 
-# def find_setuptools_libs():
-#     # need to take in account if zipped or not; then create appropriate entries
-
-#     # 1. assume the file is zipped; if so copy over;
-#     # 2. otherwise copy over 
-#     # need to preserve the easy-install.pth order
-    
-#     seen = set()
-#     sitepackages = site.getsitepackages()
-#     root = os.path.normpath(os.path.join(sys.executable, "../../Lib"))
-#     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
-#         ignore = False
-#         for pkg in sitepackages:
-
 def find_package_libs(root):
     for dirpath, dirnames, filenames in os.walk(root):
         for filename in filenames:
@@ -296,18 +288,17 @@ def find_package_libs(root):
             yield relpath, path
 
 
-def create_singlejar(output_path, classpath, include, runpy):
+def create_singlejar(output_path, classpath, runpy):
     jars = classpath
     jars.extend(find_jython_jars())
     site_path = site.getsitepackages()[0]
     jar_pth_path = os.path.join(site_path, "jar.pth")
     for jar_path in sorted(read_pth(jar_pth_path).itervalues()):
-        print "Adding jar", jar_path
         jars.append(os.path.join(site_path, jar_path))
     
-    with closing(JarCopy(output_path=output_path)) as singlejar:
+    with closing(JarCopy(output_path=output_path, runpy=runpy)) as singlejar:
         singlejar.copy_jars(jars)
-        # add include roots
+        print "Copying standard library"
         for relpath, realpath in find_jython_lib_files():
             singlejar.copy_file(relpath, realpath)
         sitepackage = site.getsitepackages()[0]
@@ -319,9 +310,9 @@ def create_singlejar(output_path, classpath, include, runpy):
                 with open(path) as f:
                     with closing(ZipInputStream(f)) as input_zip:
                         singlejar.copy_zip_input_stream(input_zip)
-                print "Copied zip file", path
+                print "Copying", path, "(zipped file)"  # tiny lie - already copied, but keeping consistent!
             except IOError:
-                print "Need to copy file tree", path
+                print "Copying", path
                 for pkg_relpath, pkg_realpath in find_package_libs(path):
                     # Filter out egg metadata
                     parts = pkg_relpath.split(os.sep)
@@ -330,7 +321,6 @@ def create_singlejar(output_path, classpath, include, runpy):
                     head = parts[0]
                     if head == "EGG-INFO" or head.endswith(".egg-info"):
                         continue
-                    print "Copy file", pkg_realpath, "to", os.path.join("Lib", pkg_relpath)
                     singlejar.copy_file(pkg_relpath, pkg_realpath)
 
         if runpy and os.path.exists(runpy):
@@ -343,7 +333,6 @@ class singlejar(setuptools.Command):
     user_options = [
         ("output=",    "o",  "write jar to output path"),
         ("classpath=", None, "jars to include in addition to Jython runtime and site-packages jars"),  # FIXME take a list?
-        ("include=",   "i",  "paths to additional Python libraries and other files to include"),  # FIXME ditto, take a list?
         ("runpy=",     "r",  "path to __run__.py to make a runnable jar"),
     ]
 
@@ -356,21 +345,29 @@ class singlejar(setuptools.Command):
             pass
         self.output = os.path.join(os.getcwd(), "{}-{}-single.jar".format(metadata.get_name(), metadata.get_version()))
         self.classpath = []
-        self.include = []
         self.runpy = os.path.join(os.getcwd(), "__run__.py")
             
     def finalize_options(self):
         # could validate self.output is a valid path FIXME
         if self.classpath:
             self.classpath = self.classpath.split(":")
-        if self.include:
-            self.include = self.include.split(":")
 
     def run(self):
-        create_singlejar(self.output, self.classpath, self.include, self.runpy)
+        create_singlejar(self.output, self.classpath, self.runpy)
 
 
 
 def singlejar_command():
-    print "args", sys.argv
-    clamp.build.create_singlejar("jython-single.jar", [], [], os.path.join(os.getcwd(), "__run__.py"))
+    parser = argparse.ArgumentParser(description="create a singlejar of all Jython dependencies, including clamped jars")
+    parser.add_argument("--output", "-o", default="jython-single.jar", metavar="PATH",
+                        help="write jar to output path")
+    parser.add_argument("--classpath", default=None,
+                        help="jars to include in addition to Jython runtime and site-packages jars")
+    parser.add_argument("--runpy", "-r", default=os.path.join(os.getcwd(), "__run__.py"), metavar="PATH",
+                        help="path to __run__.py to make a runnable jar")
+    args = parser.parse_args()
+    if args.classpath:
+        args.classpath = args.classpath.split(":")
+    else:
+        args.classpath = []
+    clamp.build.create_singlejar(args.output, args.classpath, args.runpy)
