@@ -8,11 +8,12 @@ import site
 import sys
 import time
 
+from collections import OrderedDict
 from contextlib import closing  # FIXME maybe directly support a context manager interface
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
 from java.io import BufferedInputStream
 from java.util.jar import Attributes, JarEntry, JarInputStream, JarOutputStream, Manifest
-from java.util.zip import ZipException
+from java.util.zip import ZipException, ZipInputStream
 
 import clamp  # FIXME change to relative path
 
@@ -23,16 +24,16 @@ def get_package_name(path):
     return "-".join(os.path.split(path)[1].split("-")[:-1])
 
 
-def read_jar_pth(jar_pth_path):
-    paths = {}
-    if os.path.exists(jar_pth_path):
-        with open(jar_pth_path) as jar_pth:
-            for jar_path in jar_pth:
-                jar_path = jar_path.strip()
-                if jar_path.startswith("#"):
+def read_pth(pth_path):
+    paths = OrderedDict()
+    if os.path.exists(pth_path):
+        with open(pth_path) as pth:
+            for path in pth:
+                path = path.strip()
+                if path.startswith("#") or path.startswith("import "):
                     continue  # FIXME consider preserving comments, other user changes
-                name = get_package_name(os.path.split(jar_path)[1])
-                paths[name] = jar_path
+                name = get_package_name(os.path.split(path)[1])
+                paths[name] = path
     return paths
 
 
@@ -96,31 +97,30 @@ class JarCopy(OutputJar):
     # if __run__.py defined, set manifest to point to this: org.python.util.JarRunner
     # http://stackoverflow.com/questions/9689793/cant-execute-jar-file-no-main-manifest-attribute
 
-    def copy(self, f):
-        """Given a file handle `f` of an input jar, copy to the output jar"""
+    def copy_zip_input_stream(self, zip_input_stream):
+        """Given a `zip_input_stream`, copy all entries to the output jar"""
 
         chunk = jarray.zeros(8192, "b")
-        with closing(JarInputStream(f)) as input_jar:
-            while True:
-                entry = input_jar.getNextEntry()
-                if entry is None:
-                    break
-                try:
-                    # NB: cannot simply use old entry because we need
-                    # to recompute compressed size
-                    output_entry = JarEntry(entry.name)
-                    output_entry.time = entry.time
-                    self.jar.putNextEntry(output_entry)
-                    while True:
-                        read = input_jar.read(chunk, 0, 8192)
-                        if read == -1:
-                            break
-                        self.jar.write(chunk, 0, read)
-                    self.jar.closeEntry()
-                except ZipException, e:
-                    if not "duplicate entry" in str(e):
-                        print "Problem in copying entry", output_entry
-                        raise
+        while True:
+            entry = zip_input_stream.getNextEntry()
+            if entry is None:
+                break
+            try:
+                # NB: cannot simply use old entry because we need
+                # to recompute compressed size
+                output_entry = JarEntry(entry.name)
+                output_entry.time = entry.time
+                self.jar.putNextEntry(output_entry)
+                while True:
+                    read = zip_input_stream.read(chunk, 0, 8192)
+                    if read == -1:
+                        break
+                    self.jar.write(chunk, 0, read)
+                self.jar.closeEntry()
+            except ZipException, e:
+                if not "duplicate entry" in str(e):
+                    print "Problem in copying entry", output_entry
+                    raise
 
     def copy_jars(self, jars):
         """Consumes a sequence of jar paths, fixing up paths as necessary"""
@@ -134,9 +134,10 @@ class JarCopy(OutputJar):
                 print "Ignoring duplicate jar", normed_path
                 next
             seen.add(normed_path)
+            print "Copying", normed_path
             with open(normed_path) as f:
-                print "Copying", normed_path
-                self.copy(f)
+                with closing(JarInputStream(f)) as input_jar:
+                    self.copy_zip_input_stream(input_jar)
 
     def copy_file(self, relpath, path):
         path_parts = tuple(os.path.split(relpath)[0].split(os.sep))
@@ -227,7 +228,7 @@ class buildjar(setuptools.Command):
             os.mkdir(jar_dir)
         if self.output_jar_pth:
             jar_pth_path = os.path.join(site.getsitepackages()[0], "jar.pth")
-            paths = read_jar_pth(jar_pth_path)
+            paths = read_pth(jar_pth_path)
             print "paths in jar.pth", paths
             paths[self.distribution.metadata.get_name()] = os.path.join("./jars", self.get_jar_name())
             write_jar_pth(jar_pth_path, paths)
@@ -254,8 +255,16 @@ def find_jython_jars():
 
 def find_jython_lib_files():
     seen = set()
+    sitepackages = site.getsitepackages()
     root = os.path.normpath(os.path.join(sys.executable, "../../Lib"))
     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+        ignore = False
+        for pkg in sitepackages:
+            if dirpath.startswith(pkg):
+                print "ignoring dirpath", dirpath, sitepackages
+                ignore = True
+        if ignore:
+            continue
         for filename in filenames:
             path = os.path.join(dirpath, filename)
             relpath = path[len(root)-3:]   # this will of course not work for included directories FIXME bad hack!
@@ -264,12 +273,34 @@ def find_jython_lib_files():
     # FIXME verify realpath, realpath(dirpath) has not been seen (no cycles!)
 
 
+# def find_setuptools_libs():
+#     # need to take in account if zipped or not; then create appropriate entries
+
+#     # 1. assume the file is zipped; if so copy over;
+#     # 2. otherwise copy over 
+#     # need to preserve the easy-install.pth order
+    
+#     seen = set()
+#     sitepackages = site.getsitepackages()
+#     root = os.path.normpath(os.path.join(sys.executable, "../../Lib"))
+#     for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+#         ignore = False
+#         for pkg in sitepackages:
+
+def find_package_libs(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        for filename in filenames:
+            path = os.path.join(dirpath, filename)
+            relpath = path[len(root)+1:]
+            yield relpath, path
+
+
 def create_singlejar(output_path, classpath, include, runpy):
     jars = classpath
     jars.extend(find_jython_jars())
     site_path = site.getsitepackages()[0]
     jar_pth_path = os.path.join(site_path, "jar.pth")
-    for jar_path in sorted(read_jar_pth(jar_pth_path).itervalues()):
+    for jar_path in sorted(read_pth(jar_pth_path).itervalues()):
         print "Adding jar", jar_path
         jars.append(os.path.join(site_path, jar_path))
     
@@ -277,10 +308,30 @@ def create_singlejar(output_path, classpath, include, runpy):
         singlejar.copy_jars(jars)
         # add include roots
         for relpath, realpath in find_jython_lib_files():
-            if relpath == "Lib/site-packages/jar.pth":
-                print "ignoring", relpath, realpath
-                continue
             singlejar.copy_file(relpath, realpath)
+        sitepackage = site.getsitepackages()[0]
+        for path in read_pth(os.path.join(sitepackage, "easy-install.pth")).itervalues():
+            relpath = os.path.normpath(os.path.join("Lib", path))
+            path = os.path.realpath(os.path.normpath(os.path.join(sitepackage, path)))
+
+            try:
+                with open(path) as f:
+                    with closing(ZipInputStream(f)) as input_zip:
+                        singlejar.copy_zip_input_stream(input_zip)
+                print "Copied zip file", path
+            except IOError:
+                print "Need to copy file tree", path
+                for pkg_relpath, pkg_realpath in find_package_libs(path):
+                    # Filter out egg metadata
+                    parts = pkg_relpath.split(os.sep)
+                    if len(parts) < 2:
+                        continue
+                    head = parts[0]
+                    if head == "EGG-INFO" or head.endswith(".egg-info"):
+                        continue
+                    print "Copy file", pkg_realpath, "to", os.path.join("Lib", pkg_relpath)
+                    singlejar.copy_file(pkg_relpath, pkg_realpath)
+
         if runpy:
             singlejar.copy_file("__run__.py", runpy)
 
