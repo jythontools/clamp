@@ -2,6 +2,7 @@ import java
 import os
 import os.path
 
+from java.io import Serializable
 from java.lang.reflect import Modifier
 from org.python.core import Py
 from org.python.compiler import CustomMaker, ProxyCodeHelpers
@@ -55,7 +56,7 @@ class SerializableProxyMaker(CustomMaker):
         if superclass:
             inheritance.append(superclass)
         for cls in inheritance:
-            if issubclass(cls, java.io.Serializable):
+            if issubclass(cls, Serializable):
                 is_serializable = True
 
         if is_serializable:
