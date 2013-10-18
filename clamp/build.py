@@ -12,7 +12,7 @@ import time
 from collections import OrderedDict
 from contextlib import closing  # FIXME maybe directly support a context manager interface
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
-from java.io import BufferedInputStream
+from java.io import BufferedInputStream, FileInputStream
 from java.util.jar import Attributes, JarEntry, JarInputStream, JarOutputStream, Manifest
 from java.util.zip import ZipException, ZipInputStream
 
@@ -106,7 +106,7 @@ class JarCopy(OutputJar):
         self.runpy = runpy
         self.setup()
 
-    def copy_zip_input_stream(self, zip_input_stream):
+    def copy_zip_input_stream(self, zip_input_stream, parent=None):
         """Given a `zip_input_stream`, copy all entries to the output jar"""
 
         chunk = jarray.zeros(8192, "b")
@@ -117,7 +117,11 @@ class JarCopy(OutputJar):
             try:
                 # NB: cannot simply use old entry because we need
                 # to recompute compressed size
-                output_entry = JarEntry(entry.name)
+                if parent:
+                    name = "/".join([parent, entry.name])
+                else:
+                    name = entry.name
+                output_entry = JarEntry(name)
                 output_entry.time = entry.time
                 self.jar.putNextEntry(output_entry)
                 while True:
@@ -126,6 +130,7 @@ class JarCopy(OutputJar):
                         break
                     self.jar.write(chunk, 0, read)
                 self.jar.closeEntry()
+                # print "Copied", entry.name
             except ZipException, e:
                 if not "duplicate entry" in str(e):
                     print "Problem in copying entry", output_entry
@@ -181,7 +186,6 @@ class JarBuilder(OutputJar):
 
 
 def validate_clamp(distribution, keyword, values):
-    print "Validating: ", keyword, values
     if keyword != "clamp":
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
     try:
@@ -248,7 +252,6 @@ class build_jar(setuptools.Command):
 
 def find_jython_jars():
     """Uses the same classpath resolution as bin/jython"""
-    # FIXME ensure no symbolic links using realpath
     jython_jar_path = os.path.join(sys.executable, "../../jython.jar")
     jython_jar_dev_path = os.path.join(sys.executable, "../../jython-dev.jar")
     if os.path.exists(jython_jar_dev_path):
@@ -288,6 +291,42 @@ def find_package_libs(root):
             yield relpath, path
 
 
+def copy_zip_file(path, output_jar):
+    try:
+        with open(path) as f:
+            with closing(BufferedInputStream(f)) as bis:
+                if not skip_zip_header(bis):
+                    return False
+                with closing(ZipInputStream(bis)) as input_zip:
+                    try:
+                        output_jar.copy_zip_input_stream(input_zip, "Lib")
+                        return True
+                    except ZipException:
+                        return False
+    except IOError:
+        return False
+
+
+def skip_zip_header(bis):
+    try:
+        for i in xrange(2000):
+            # peek ahead 2 bytes to look for PK in header
+            bis.mark(2)
+            first = chr(bis.read())
+            second = chr(bis.read())
+            if first == "P" and second == "K":
+                bis.reset() 
+                return True
+            else:
+                bis.reset()
+                bis.read()
+        else:
+            return False
+    except ValueError:  # consume -1 on unsuccessful read
+        return False
+
+
+
 def create_singlejar(output_path, classpath, runpy):
     jars = classpath
     jars.extend(find_jython_jars())
@@ -301,27 +340,32 @@ def create_singlejar(output_path, classpath, runpy):
         print "Copying standard library"
         for relpath, realpath in find_jython_lib_files():
             singlejar.copy_file(relpath, realpath)
+
+        # FOR NOW: copy everything in site-packages into Lib/ in the built jar;
+        # this is because Jython in standalone mode has the limitation that it can
+        # only properly find packages under Lib/ and cannot process .pth files
+        # THIS SHOULD BE FIXED
+            
         sitepackage = site.getsitepackages()[0]
+
         for path in read_pth(os.path.join(sitepackage, "easy-install.pth")).itervalues():
-            relpath = os.path.normpath(os.path.join("Lib", path))
+            relpath = "/".join(os.path.normpath(os.path.join("Lib", path)).split(os.sep))  # ZIP only uses /
             path = os.path.realpath(os.path.normpath(os.path.join(sitepackage, path)))
 
-            try:
-                with open(path) as f:
-                    with closing(ZipInputStream(f)) as input_zip:
-                        singlejar.copy_zip_input_stream(input_zip)
+            if copy_zip_file(path, singlejar):
                 print "Copying", path, "(zipped file)"  # tiny lie - already copied, but keeping consistent!
-            except IOError:
-                print "Copying", path
-                for pkg_relpath, pkg_realpath in find_package_libs(path):
-                    # Filter out egg metadata
-                    parts = pkg_relpath.split(os.sep)
-                    if len(parts) < 2:
-                        continue
-                    head = parts[0]
-                    if head == "EGG-INFO" or head.endswith(".egg-info"):
-                        continue
-                    singlejar.copy_file(pkg_relpath, pkg_realpath)
+                continue
+
+            print "Copying", path
+            for pkg_relpath, pkg_realpath in find_package_libs(path):
+                # Filter out egg metadata
+                parts = pkg_relpath.split(os.sep)
+                if len(parts) < 2:
+                    continue
+                head = parts[0]
+                if head == "EGG-INFO" or head.endswith(".egg-info"):
+                    continue
+                singlejar.copy_file(os.path.join("Lib", pkg_relpath), pkg_realpath)
 
         if runpy and os.path.exists(runpy):
             singlejar.copy_file("__run__.py", runpy)
