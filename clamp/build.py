@@ -252,8 +252,8 @@ class build_jar(setuptools.Command):
 
 def find_jython_jars():
     """Uses the same classpath resolution as bin/jython"""
-    jython_jar_path = os.path.join(sys.executable, "../../jython.jar")
-    jython_jar_dev_path = os.path.join(sys.executable, "../../jython-dev.jar")
+    jython_jar_path = os.path.normpath(os.path.join(sys.executable, "../../jython.jar"))
+    jython_jar_dev_path = os.path.normpath(os.path.join(sys.executable, "../../jython-dev.jar"))
     if os.path.exists(jython_jar_dev_path):
         jars = [jython_jar_dev_path]
         jars.extend(glob.glob(os.path.normpath(os.path.join(jython_jar_dev_path, "../javalib/*.jar"))))
