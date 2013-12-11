@@ -40,7 +40,7 @@ $ bin/singlejar # same, but outputs jython-single.jar,
 TODO
 ====
 
-* Add support for [variadic constructors](variadic-constructors) of
+* Add support for [variadic constructors](#variadic-constructors) of
   clamped classes. This means that in Java, using code can simply
   perform `new BarClamp(x, y, ...)`; in Python, `BarClamp(x, y, ...)`.
 
