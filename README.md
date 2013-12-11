@@ -73,6 +73,11 @@ TODO
   possible collisions. Also, it would be nice if jars in
   `site-packages` could simply be included directly without unpacking.
 
+* Testing and placement in PyPI. Due to the bytecode construction,
+  writing unit tests for this type of functionality seems to be
+  nontrivial, but still very much needed to move this from an initial
+  spike to not being in a pre-alpha stage.
+
 
 Known issues
 ============
