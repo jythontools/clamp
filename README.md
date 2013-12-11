@@ -85,14 +85,14 @@ class ColorJob(Job):
 But there's a problem: class decorators are applied *after* type
 construction in Python. The solution is for such class decorators to
 transform (rewrite) the bytecode for generated Java class, then save
-it under the original class name. Such transformations can be readily done
-with the ASM package by using a `[AnnotationVisitor][]`, as documented
-in section 4.2 of the [ASM user guide][].
+it under the original class name. Such transformations can be readily
+done with the ASM package by using a <pre>[AnnotationVisitor][]</pre>,
+as documented in section 4.2 of the [ASM user guide][].
 
 Saving under the original class name requires a little more work,
 because currently all generated classes in Clamp are directly written
 using `JarOutputStream`; simply resaving will result in a
-`ZipException` of `"duplicate entry"`. This simply reuires deferring
+`ZipException` of `"duplicate entry"`. This simply requires deferring
 the write of a module, including any supporting Java classes, until
 the top-level script of the module has completed.
 
