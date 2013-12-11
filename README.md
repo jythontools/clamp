@@ -44,22 +44,26 @@ TODO
 * Add support for variadic constructors of clamped classes, that is
   something like `new BarClamp(Object...)`
 
-* Provide basic support for annotations; see below
+* Provide basic support for annotations.
 
 * Extend setup.py support of install so that it can use build_jar; see
   http://www.niteoweb.com/blog/setuptools-run-custom-code-during-install
-  for some ideas
+  for some ideas.
 
-* Annotation magic? It would be nice to import annotations into
-  Python, use as class decorators and function decorators, and then
-  still compile a Java class that works.
+* [Annotation magic](#annotations). It would be nice to import
+  annotations into Python, use as class decorators and function
+  decorators, and then still compile a Java class that works.
 
 * Instance fields support, comparable to `__slots__`, but baked into
-  the emitted Java class.
+  the emitted Java class. Such support would directly enable emitted
+  clases to be used as POJOs by using Java code.
+
+* Map Python descriptors to Java's convention of getters/setters. Note
+  that `__delete__` is not a mappable idea!
 
 
-Supporting Java annotations
-===========================
+<a name="annotations">Supporting Java annotations</a>
+=====================================================
 
 Java annotations are widely used in contemporary Java code. For
 example, in Apache Quartz, one might write the following in Java:
@@ -82,16 +86,24 @@ class ColorJob(Job):
     ...
 ````
 
-But there's a problem: class decorators are applied *after* type
-construction in Python. The solution is for such class decorators to
-transform (rewrite) the bytecode for generated Java class, then save
-it under the original class name. Such transformations can be readily
-done with the ASM package by using a <code>[AnnotationVisitor][]</code>,
-as documented in section 4.2 of the [ASM user guide][].
+But there are a few problems. First, Java annotations are
+interfaces. To solve, clamp can support a module, let's call it
+`clamp.magic`, which when imported, will intercept any subsequent
+imports of Java class/method annotations and turn them into class
+decorators/function decorators. This requires the top-level script of
+`clamp.magic` to insert an appropriate meta importer to
+`sys.meta_path`, as described in [PEP 302][].
 
-Saving under the original class name requires a little more work,
-because currently all generated classes in Clamp are directly written
-using `JarOutputStream`; simply resaving will result in a
+Next, class decorators are applied *after* type construction in
+Python. The solution is for such class decorators to transform
+(rewrite) the bytecode for generated Java class, then save it under
+the original class name. Such transformations can be readily done with
+the ASM package by using an <code>[AnnotationVisitor][]</code>, as
+documented in section 4.2 of the [ASM user guide][].
+
+Lastly, saving under the original class name requires a little more
+work, because currently all generated classes in Clamp are directly
+written using `JarOutputStream`; simply resaving will result in a
 `ZipException` of `"duplicate entry"`. This simply requires deferring
 the write of a module, including any supporting Java classes, until
 the top-level script of the module has completed.
@@ -106,3 +118,4 @@ syntax equivalent.
 
   [AnnotationVisitor]: http://asm.ow2.org/asm40/javadoc/user/org/objectweb/asm/AnnotationVisitor.html
   [ASM user guide]: http://download.forge.objectweb.org/asm/asm4-guide.pdf
+  [PEP 302]: http://www.python.org/dev/peps/pep-0302/
