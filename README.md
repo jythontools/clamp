@@ -67,11 +67,22 @@ TODO
 * Map [Python descriptors][] to Java's convention of getters/setters. Note
   that `__delete__` is not a mappable idea!
 
+* Add external jar support with a new `jar` keyword in `setup.py` such
+  that any such referred jar can be placed in `site-packages` and
+  referred to by `jar.pth`. Current workaround: directly place in
+  site-packages and manually modify `jar.pth`.
+
+* Add support for resolving such external jars with Maven.
+
 * Standalone jar support in Jython does not currently support `.pth`
   files and consequently `site-packages`. Clamp works around this by
   packaging everything in `Lib/`, but this is not desirable due to
   possible collisions. Also, it would be nice if jars in
   `site-packages` could simply be included directly without unpacking.
+
+* The singlejar command should generate Jython cache info on all
+  included files. It's not clear how readily this can be done on a
+  per-jar basis with build_jar.
 
 * Testing and placement in PyPI. Due to the bytecode construction,
   writing unit tests for this type of functionality seems to be
