@@ -50,7 +50,7 @@ TODO
   http://www.niteoweb.com/blog/setuptools-run-custom-code-during-install
   for some ideas.
 
-* [Annotation magic](#annotations). It would be nice to import
+* [Annotation magic](#supporting-java-annotations). It would be nice to import
   annotations into Python, use as class decorators and function
   decorators, and then still compile a Java class that works.
 
@@ -62,8 +62,8 @@ TODO
   that `__delete__` is not a mappable idea!
 
 
-<a name="annotations">Supporting Java annotations</a>
-=====================================================
+Supporting Java annotations
+===========================
 
 Java annotations are widely used in contemporary Java code. For
 example, in Apache Quartz, one might write the following in Java:
