@@ -80,9 +80,12 @@ TODO
   possible collisions. Also, it would be nice if jars in
   `site-packages` could simply be included directly without unpacking.
 
-* The singlejar command should generate Jython cache info on all
-  included files. It's not clear how readily this can be done on a
-  per-jar basis with build_jar.
+* The `singlejar` command should generate Jython cache info on all
+  included files and bundle in the generated uber jar. It's not clear
+  how readily this precaching can be done on a per-jar basis with
+  `build_jar`, but cache data is per jar; see
+  `{python.cachedir}/packages/*.pkc`; the corresponding code in
+  Jython's internals is in `org.python.core.packagecache`.
 
 * Testing and placement in PyPI. Due to the bytecode construction,
   writing unit tests for this type of functionality seems to be
