@@ -86,7 +86,7 @@ But there's a problem: class decorators are applied *after* type
 construction in Python. The solution is for such class decorators to
 transform (rewrite) the bytecode for generated Java class, then save
 it under the original class name. Such transformations can be readily
-done with the ASM package by using a <pre>[AnnotationVisitor][]</pre>,
+done with the ASM package by using a <code>[AnnotationVisitor][]</code>,
 as documented in section 4.2 of the [ASM user guide][].
 
 Saving under the original class name requires a little more work,
