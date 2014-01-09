@@ -120,3 +120,37 @@ class ClampProxyMaker(object):
             self.package + "." + pythonModuleName + "." + className, mapping,
             self.package, self.kwargs)
 
+
+def Clamp(package, proxy_maker=ClampProxyMaker):
+    """ A helper method that allows you to create clamped classes
+
+    Example::
+
+        class Test(Clamp(package='bar'), Callable, Serializable):
+
+            def __init__(self):
+                print "Being init-ed", self
+
+            def call(self):
+                print "foo"
+                return 42
+    """
+
+    def _clamp_closure(package, proxy_maker):
+        """This closure sets the metaclass with our desired attributes
+        """
+        class ClampProxyMakerMeta(type):
+
+            def __new__(cls, name, bases, dct):
+                newdct = dict(dct)
+                newdct['__proxymaker__'] = proxy_maker(package=package)
+                return type.__new__(cls, name, bases, newdct)
+
+        return ClampProxyMakerMeta
+
+
+    class Clamped(object):
+        """Allows us not to have to set the __metaclass__ at all"""
+        __metaclass__ = _clamp_closure(package=package, proxy_maker=proxy_maker)
+
+    return Clamped
