@@ -121,12 +121,15 @@ class ClampProxyMaker(object):
             self.package, self.kwargs)
 
 
-def Clamp(package, proxy_maker=ClampProxyMaker):
+def clamp_base(package, proxy_maker=ClampProxyMaker):
     """ A helper method that allows you to create clamped classes
 
     Example::
 
-        class Test(Clamp(package='bar'), Callable, Serializable):
+        BarClamp = clamp_base(package='bar')
+
+
+        class Test(BarClamp, Callable, Serializable):
 
             def __init__(self):
                 print "Being init-ed", self
@@ -149,8 +152,8 @@ def Clamp(package, proxy_maker=ClampProxyMaker):
         return ClampProxyMakerMeta
 
 
-    class Clamped(object):
+    class ClampBase(object):
         """Allows us not to have to set the __metaclass__ at all"""
         __metaclass__ = _clamp_closure(package=package, proxy_maker=proxy_maker)
 
-    return Clamped
+    return ClampBase
