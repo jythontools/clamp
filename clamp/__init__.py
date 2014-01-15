@@ -1,6 +1,5 @@
 import java
-import os
-import os.path
+import logging
 
 from java.io import Serializable
 from java.lang.reflect import Modifier
@@ -12,6 +11,8 @@ from org.python.util import CodegenUtils
 __all__ = ["ClampProxyMaker"]
 
 
+log = logging.getLogger(__name__)
+
 # FIXME maybe this should be supported with a context manager; we
 # could also do this in the context of a threadlocal; however, this is
 # currently just used by setup.py in an indirect fashion, so probably
@@ -21,9 +22,28 @@ _builder = None
 
 def register_builder(builder):
     global _builder
+    log.debug("Registering builder %r, old builder was %r", builder, _builder)
     old_builder = _builder
     _builder = builder
     return old_builder
+
+
+class Constant(object):
+    """ Use this class to declare class attributes as java const
+
+    Example::
+
+        class Test(BarClamp, Callable, Serializable):
+
+            serialVersionUID = Constant(Long(1234), Long.TYPE)
+    """
+
+    def __init__(self, value, type=None):
+        # do type inference on value_type when we have that
+        if type is None:
+            raise NotImplementedError("type has to be set right now")
+        self.value = value
+        self.type = type
 
 
 class SerializableProxyMaker(CustomMaker):
@@ -37,7 +57,7 @@ class SerializableProxyMaker(CustomMaker):
 
     # TODO support fields in conjunction with property support in Python
 
-# (None, 
+# (None,
 #  array(java.lang.Class, [<type 'java.util.concurrent.Callable'>, <type 'java.io.Serializable'>]),
 #  u'BarClamp',
 #  u'__main__',
@@ -48,7 +68,9 @@ class SerializableProxyMaker(CustomMaker):
         self.package = package
         self.kwargs = kwargs
         
-        print "superclass=%s, interfaces=%s, className=%s, pythonModuleName=%s, fullProxyName=%s, mapping=%s, package=%s, kwargs=%s" % (superclass, interfaces, className, pythonModuleName, fullProxyName, mapping, package, kwargs)
+        log.debug("superclass=%s, interfaces=%s, className=%s, pythonModuleName=%s, fullProxyName=%s, mapping=%s, "
+                  "package=%s, kwargs=%s", superclass, interfaces, className, pythonModuleName, fullProxyName, mapping,
+                  package, kwargs)
 
         # FIXME break this out
         is_serializable = False
@@ -65,11 +87,22 @@ class SerializableProxyMaker(CustomMaker):
             self.constants = {}
         if "constants" in kwargs:
             self.constants.update(self.kwargs["constants"])
+        self.updateConstantsFromMapping(mapping)
+
         CustomMaker.__init__(self, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping)
-    
+
+    def updateConstantsFromMapping(self, mapping):
+        """Looks for Constant in Object's dict and updates the constants, with appropriate values
+        """
+        for key, val in mapping.iteritems():
+            if isinstance(val, Constant):
+                if key in self.constants:
+                    log.warn("Constant with name %s is already declared, overriding", key)
+                self.constants[key] = (val.value, val.type)
+
     def doConstants(self):
         # FIXME eg, self.constants = { "fortytwo": (java.lang.Long(42), java.lang.Long.TYPE) }
-        print "Constants", self.constants
+        log.debug("Constants: %s", self.constants)
         code = self.classfile.addMethod("<clinit>", ProxyCodeHelpers.makeSig("V"), Modifier.STATIC)
         for constant, (value, constant_type) in sorted(self.constants.iteritems()):
             self.classfile.addField(
@@ -86,21 +119,21 @@ class SerializableProxyMaker(CustomMaker):
 
     def makeClass(self):
         global _builder
-        print "Entering makeClass", self
+        log.debug("Entering makeClass for %r", self)
         try:
             import sys
-            print "sys.path", sys.path
+            log.debug("Current sys.path: %s", sys.path)
             # If already defined on sys.path (including CLASSPATH), simply return this class
             # if you need to tune this, derive accordingly from this class or create another CustomMaker
             cls = Py.findClass(self.myClass)
-            print "Looked up proxy", self.myClass, cls
+            log.debug("Looked up proxy: %r, %r", self.myClass, cls)
             if cls is None:
                 raise TypeError("No proxy class")
         except:
             if _builder:
-                print "Calling super...", self.package
+                log.debug("Calling super... for %r", self.package)
                 cls = CustomMaker.makeClass(self)
-                print "Built proxy", self.myClass
+                log.info("Built proxy: %r", self.myClass)
             else:
                 raise TypeError("FIXME better err msg - Cannot construct class without a defined builder")
         return cls
@@ -114,19 +147,23 @@ class ClampProxyMaker(object):
     
     def __call__(self, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping):
         """Constructs a usable proxy name that does not depend on ordering"""
-        print "ClampProxyMaker:", self.package, superclass, interfaces, className, pythonModuleName, fullProxyName, mapping
+        log.debug("Called ClampProxyMaker: %s, %r, %r, %s, %s, %s, %r", self.package, superclass, interfaces,
+                  className, pythonModuleName, fullProxyName, mapping)
         return SerializableProxyMaker(
             superclass, interfaces, className, pythonModuleName,
             self.package + "." + pythonModuleName + "." + className, mapping,
             self.package, self.kwargs)
 
 
-def Clamp(package, proxy_maker=ClampProxyMaker):
+def clamp_base(package, proxy_maker=ClampProxyMaker):
     """ A helper method that allows you to create clamped classes
 
     Example::
 
-        class Test(Clamp(package='bar'), Callable, Serializable):
+        BarClamp = clamp_base(package='bar')
+
+
+        class Test(BarClamp, Callable, Serializable):
 
             def __init__(self):
                 print "Being init-ed", self
@@ -149,8 +186,8 @@ def Clamp(package, proxy_maker=ClampProxyMaker):
         return ClampProxyMakerMeta
 
 
-    class Clamped(object):
+    class ClampBase(object):
         """Allows us not to have to set the __metaclass__ at all"""
         __metaclass__ = _clamp_closure(package=package, proxy_maker=proxy_maker)
 
-    return Clamped
+    return ClampBase

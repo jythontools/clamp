@@ -8,6 +8,7 @@ import os.path
 import site
 import sys
 import time
+import logging
 
 from collections import OrderedDict
 from contextlib import closing  # FIXME maybe directly support a context manager interface
@@ -18,6 +19,7 @@ from java.util.zip import ZipException, ZipInputStream
 
 import clamp  # FIXME change to relative path
 
+log = logging.getLogger(__name__)
 
 # probably refactor in a class
 
@@ -64,7 +66,7 @@ class OutputJar(object):
         if self.runpy and os.path.exists(self.runpy):
             manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.JarRunner"
         else:
-            print "No __run__.py defined, so defaulting to Jython command line"
+            log.debug("No __run__.py defined, so defaulting to Jython command line")
             manifest.getMainAttributes()[Attributes.Name.MAIN_CLASS] = "org.python.util.jython"
 
         self.output = open(self.output_path, "wb")
@@ -90,7 +92,7 @@ class OutputJar(object):
                     self.jar.closeEntry()
                 except ZipException, e:
                     if not "duplicate entry" in str(e):
-                        print "Problem in creating entry", entry
+                        log.error("Problem in creating entry %r", entry, exc_info=True)
                         raise
                 self.created_paths.add(ancestor)
 
@@ -130,10 +132,9 @@ class JarCopy(OutputJar):
                         break
                     self.jar.write(chunk, 0, read)
                 self.jar.closeEntry()
-                # print "Copied", entry.name
             except ZipException, e:
                 if not "duplicate entry" in str(e):
-                    print "Problem in copying entry", output_entry
+                    log.error("Problem in copying entry %r", output_entry, exc_info=True)
                     raise
 
     def copy_jars(self, jars):
@@ -142,19 +143,18 @@ class JarCopy(OutputJar):
         for jar_path in jars:
             normed_path = os.path.realpath(os.path.normpath(jar_path))
             if os.path.splitext(normed_path)[1] != ".jar":
-                print "Will only copy jars, not", normed_path
+                log.warn("Will only copy jars, not %s", normed_path)
                 next
             if normed_path in seen:
                 next
             seen.add(normed_path)
-            print "Copying", normed_path
+            log.debug("Copying %s", normed_path)
             with open(normed_path) as f:
                 with closing(JarInputStream(f)) as input_jar:
                     self.copy_zip_input_stream(input_jar)
 
     def copy_file(self, relpath, path):
         path_parts = tuple(os.path.split(relpath)[0].split(os.sep))
-        # print "Creating", path_parts
         self.create_ancestry(path_parts)
         chunk = jarray.zeros(8192, "b")
         with open(path) as f:
@@ -200,7 +200,7 @@ def validate_clamp(distribution, keyword, values):
                 "clamp={} is invalid, must be an iterable of importable module names".format(
                     values))
     except TypeError, ex:
-        print type(ex), ex
+        log.error("Invalid clamp", exc_info=True)
         raise DistutilsSetupError("clamp={} is invalid: {}".format(values, ex))
     distribution.clamp = clamped
 
@@ -241,7 +241,7 @@ class build_jar(setuptools.Command):
         if self.output_jar_pth:
             jar_pth_path = os.path.join(site.getsitepackages()[0], "jar.pth")
             paths = read_pth(jar_pth_path)
-            print "paths in jar.pth", paths
+            log.debug("paths in jar.pth are %r", paths)
             paths[self.distribution.metadata.get_name()] = os.path.join("./jars", self.get_jar_name())
             write_jar_pth(jar_pth_path, paths)
         with closing(JarBuilder(output_path=self.output)) as builder:
@@ -337,7 +337,7 @@ def create_singlejar(output_path, classpath, runpy):
     
     with closing(JarCopy(output_path=output_path, runpy=runpy)) as singlejar:
         singlejar.copy_jars(jars)
-        print "Copying standard library"
+        log.debug("Copying standard library")
         for relpath, realpath in find_jython_lib_files():
             singlejar.copy_file(relpath, realpath)
 
@@ -353,10 +353,10 @@ def create_singlejar(output_path, classpath, runpy):
             path = os.path.realpath(os.path.normpath(os.path.join(sitepackage, path)))
 
             if copy_zip_file(path, singlejar):
-                print "Copying", path, "(zipped file)"  # tiny lie - already copied, but keeping consistent!
+                log.debug("Copying %s (zipped file)", path)  # tiny lie - already copied, but keeping consistent!
                 continue
 
-            print "Copying", path
+            log.debug("Copying %s", path)
             for pkg_relpath, pkg_realpath in find_package_libs(path):
                 # Filter out egg metadata
                 parts = pkg_relpath.split(os.sep)
