@@ -1,7 +1,6 @@
 import argparse
 import glob
 import java
-import setuptools
 import jarray
 import os
 import os.path
@@ -11,15 +10,21 @@ import time
 import logging
 
 from collections import OrderedDict
-from contextlib import closing  # FIXME maybe directly support a context manager interface
-from distutils.errors import DistutilsOptionError, DistutilsSetupError
+from contextlib import closing  # FIXME need to merge in Java 7 support for AutoCloseable
 from java.io import BufferedInputStream, FileInputStream
 from java.util.jar import Attributes, JarEntry, JarInputStream, JarOutputStream, Manifest
 from java.util.zip import ZipException, ZipInputStream
 
+
 import clamp  # FIXME change to relative path
 
 log = logging.getLogger(__name__)
+
+
+# NOTE the lack of process safety - presumably we do not support
+# simultaneous installs.  If in fact we need to do this, implement
+# the obvious advisory locking scheme.
+
 
 # probably refactor in a class
 
@@ -40,10 +45,67 @@ def read_pth(pth_path):
     return paths
 
 
-def write_jar_pth(jar_pth_path, paths):
-    with open(jar_pth_path, "w") as jar_pth:
-        for name, path in sorted(paths.iteritems()):
-            jar_pth.write(path + "\n")
+class JarPth(object):
+    def __init__(self):
+        self._jar_pth_path = os.path.join(site.getsitepackages()[0], "jar.pth")
+        self._paths = read_pth(self._jar_pth_path)
+        self._mutated = False
+        log.debug("paths in jar.pth %s are %r", self._jar_pth_path, self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__ (self, type, value, tb):
+        self.close()
+
+    def _write_jar_pth(self):
+        if self._mutated:
+            with open(self._jar_pth_path, "w") as jar_pth:
+                for name, path in sorted(self.iteritems()):
+                    jar_pth.write(path + "\n")
+
+    def close(self):
+        self._write_jar_pth()
+
+    def __getitem__(self, key):
+        return self._paths[key]
+ 
+    def __setitem__(self, key, value):
+        self._paths[key] = value
+        self._mutated = True
+
+    def __delitem__(self, key):
+        del self._paths[key]
+        self._mutated = True
+ 
+    def __contains__(self, key):
+        return key in self._paths
+ 
+    def __len__(self):
+        return len(self._paths)
+ 
+    def __repr__(self):
+        return repr(self._paths)
+    
+    def __iter__(self):
+        return self._paths.__iter__()
+
+    def iterkeys(self):
+        return self._paths.iterkeys()
+
+    def itervalues(self):
+        return self._paths.itervalues()
+
+    def iteritems(self):
+        return self._paths.iteritems()
+
+
+# Default location for storing clamped jars
+def init_jar_dir():
+    jar_dir = os.path.join(site.getsitepackages()[0], "jars")
+    if not os.path.exists(jar_dir):
+        os.mkdir(jar_dir)
+    return jar_dir
 
 
 class OutputJar(object):
@@ -59,6 +121,12 @@ class OutputJar(object):
             return
         self.runpy = None
         self.setup()
+
+    def __enter__ (self):
+        return self
+
+    def __exit__ (self, type, value, tb):
+        self.close()
 
     def setup(self):
         manifest = Manifest()
@@ -185,71 +253,6 @@ class JarBuilder(OutputJar):
         self.jar.closeEntry()
 
 
-def validate_clamp(distribution, keyword, values):
-    if keyword != "clamp":
-        raise DistutilsSetupError("invalid keyword: {}".format(keyword))
-    try:
-        invalid = []
-        clamped = list(distribution.clamp)
-        for v in clamped:
-            # FIXME test if valid module name too
-            if not isinstance(v, basestring):
-                invalid.append(v)
-        if invalid:
-            raise DistutilsSetupError(
-                "clamp={} is invalid, must be an iterable of importable module names".format(
-                    values))
-    except TypeError, ex:
-        log.error("Invalid clamp", exc_info=True)
-        raise DistutilsSetupError("clamp={} is invalid: {}".format(values, ex))
-    distribution.clamp = clamped
-
-
-class build_jar(setuptools.Command):
-
-    description = "create a jar for all clamped Python classes for this package"
-    user_options = [
-        ("output=",   "o", "write jar to output path"),
-    ]
-
-    def initialize_options(self):
-        self.output = None
-        self.output_jar_pth = True
-
-    def finalize_options(self):
-        if self.output is None:
-            jar_dir = os.path.join(site.getsitepackages()[0], "jars")
-            self.output = os.path.join(jar_dir, self.get_jar_name())
-        else:
-            self.output_jar_pth = False
-            dir_path = os.path.split(self.output)[0]
-            if dir_path and not os.path.exists(dir_path):
-                raise DistutilsOptionError("Directory {} to write jar must exist".format(dir_path))
-            if os.path.splitext(self.output)[1] != ".jar":
-                raise DistutilsOptionError("Path must be to a valid jar name, not {}".format(self.output))
-
-    def get_jar_name(self):
-        metadata = self.distribution.metadata
-        return "{}-{}.jar".format(metadata.get_name(), metadata.get_version())
-
-    def run(self):
-        if not self.distribution.clamp:
-            raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
-        jar_dir = os.path.join(site.getsitepackages()[0], "jars")
-        if not os.path.exists(jar_dir):
-            os.mkdir(jar_dir)
-        if self.output_jar_pth:
-            jar_pth_path = os.path.join(site.getsitepackages()[0], "jar.pth")
-            paths = read_pth(jar_pth_path)
-            log.debug("paths in jar.pth are %r", paths)
-            paths[self.distribution.metadata.get_name()] = os.path.join("./jars", self.get_jar_name())
-            write_jar_pth(jar_pth_path, paths)
-        with closing(JarBuilder(output_path=self.output)) as builder:
-            clamp.register_builder(builder)
-            for module in self.distribution.clamp:
-                __import__(module)
-
-
 def find_jython_jars():
     """Uses the same classpath resolution as bin/jython"""
     jython_jar_path = os.path.normpath(os.path.join(sys.executable, "../../jython.jar"))
@@ -326,16 +329,27 @@ def skip_zip_header(bis):
         return False
 
 
+def do_build_jar(package_name, jar_name, clamped_modules, output_path):
+    if output_path is None:
+        jar_dir = init_jar_dir()
+        output_path = os.path.join(jar_dir, jar_name)
+        with JarPth() as paths:
+            paths[package_name] = os.path.join("./jars", jar_name)
+    with JarBuilder(output_path=output_path) as builder:
+        clamp.register_builder(builder)
+        for module in clamped_modules:
+            __import__(module)
+
 
 def create_singlejar(output_path, classpath, runpy):
     jars = classpath
     jars.extend(find_jython_jars())
     site_path = site.getsitepackages()[0]
-    jar_pth_path = os.path.join(site_path, "jar.pth")
-    for jar_path in sorted(read_pth(jar_pth_path).itervalues()):
-        jars.append(os.path.join(site_path, jar_path))
+    with JarPth() as jar_pth:
+        for jar_path in sorted(jar_pth.itervalues()):
+            jars.append(os.path.join(site_path, jar_path))
     
-    with closing(JarCopy(output_path=output_path, runpy=runpy)) as singlejar:
+    with JarCopy(output_path=output_path, runpy=runpy) as singlejar:
         singlejar.copy_jars(jars)
         log.debug("Copying standard library")
         for relpath, realpath in find_jython_lib_files():
@@ -369,49 +383,3 @@ def create_singlejar(output_path, classpath, runpy):
 
         if runpy and os.path.exists(runpy):
             singlejar.copy_file("__run__.py", runpy)
-
-
-class singlejar(setuptools.Command):
-
-    description = "create a singlejar of all Jython dependencies, including clamped jars"
-    user_options = [
-        ("output=",    "o",  "write jar to output path"),
-        ("classpath=", None, "jars to include in addition to Jython runtime and site-packages jars"),  # FIXME take a list?
-        ("runpy=",     "r",  "path to __run__.py to make a runnable jar"),
-    ]
-
-    def initialize_options(self):
-        metadata = self.distribution.metadata
-        jar_dir = os.path.join(site.getsitepackages()[0], "jars")
-        try:
-            os.mkdir(jar_dir)
-        except OSError:
-            pass
-        self.output = os.path.join(os.getcwd(), "{}-{}-single.jar".format(metadata.get_name(), metadata.get_version()))
-        self.classpath = []
-        self.runpy = os.path.join(os.getcwd(), "__run__.py")
-            
-    def finalize_options(self):
-        # could validate self.output is a valid path FIXME
-        if self.classpath:
-            self.classpath = self.classpath.split(":")
-
-    def run(self):
-        create_singlejar(self.output, self.classpath, self.runpy)
-
-
-
-def singlejar_command():
-    parser = argparse.ArgumentParser(description="create a singlejar of all Jython dependencies, including clamped jars")
-    parser.add_argument("--output", "-o", default="jython-single.jar", metavar="PATH",
-                        help="write jar to output path")
-    parser.add_argument("--classpath", default=None,
-                        help="jars to include in addition to Jython runtime and site-packages jars")
-    parser.add_argument("--runpy", "-r", default=os.path.join(os.getcwd(), "__run__.py"), metavar="PATH",
-                        help="path to __run__.py to make a runnable jar")
-    args = parser.parse_args()
-    if args.classpath:
-        args.classpath = args.classpath.split(":")
-    else:
-        args.classpath = []
-    clamp.build.create_singlejar(args.output, args.classpath, args.runpy)
