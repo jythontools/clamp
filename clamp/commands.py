@@ -2,11 +2,23 @@ import logging
 import os
 import os.path
 import setuptools
+from contextlib import contextmanager
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
 
 from build import create_singlejar, build_jar
 
-log = logging.getLogger(__name__)
+logging.basicConfig()
+log = logging.getLogger("clamp") # __name__)
+
+
+@contextmanager
+def honor_verbosity(verbose):
+    if verbose:
+        old_level = log.getEffectiveLevel()
+        log.setLevel(logging.DEBUG)
+    yield
+    if verbose:
+        log.setLevel(old_level)
 
 
 def validate_clamp_keyword(distribution, keyword, values):
@@ -52,10 +64,11 @@ class build_jar_command(setuptools.Command):
         return "{}-{}.jar".format(metadata.get_name(), metadata.get_version())
 
     def run(self):
-        if not self.distribution.clamp:
-            raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
-        build_jar(self.distribution.metadata.get_name(),
-                  self.get_jar_name(), self.distribution.clamp, self.output)
+        with honor_verbosity(self.distribution.verbose):
+            if not self.distribution.clamp:
+                raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
+            build_jar(self.distribution.metadata.get_name(),
+                      self.get_jar_name(), self.distribution.clamp, self.output)
 
 
 
@@ -82,10 +95,11 @@ class clamp_command(setuptools.Command):
         return "{}-{}.jar".format(metadata.get_name(), metadata.get_version())
 
     def run(self):
-        if not self.distribution.clamp:
-            raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
-        build_jar(self.distribution.metadata.get_name(),
-                  self.get_jar_name(), self.distribution.clamp, self.output)
+        with honor_verbosity(self.distribution.verbose):
+            if not self.distribution.clamp:
+                raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
+            build_jar(self.distribution.metadata.get_name(),
+                      self.get_jar_name(), self.distribution.clamp, self.output)
 
 
 class singlejar_command(setuptools.Command):
@@ -109,7 +123,8 @@ class singlejar_command(setuptools.Command):
             self.classpath = self.classpath.split(":")
 
     def run(self):
-        create_singlejar(self.output, self.classpath, self.runpy)
+        with honor_verbosity(self.distribution.verbose):
+            create_singlejar(self.output, self.classpath, self.runpy)
 
 
 def singlejar_script_command():
