@@ -1,6 +1,5 @@
 import argparse
 import glob
-import java
 import jarray
 import os
 import os.path
@@ -19,6 +18,24 @@ from java.util.zip import ZipException, ZipInputStream
 import clamp  # FIXME change to relative path
 
 log = logging.getLogger(__name__)
+
+
+# FIXME maybe this should be supported with a context manager; we
+# could also do this in the context of a threadlocal; however, this is
+# currently just used by setup.py in an indirect fashion, so probably
+# OK
+
+_builder = None
+
+def register_builder(builder):
+    global _builder
+    log.debug("Registering builder %r, old builder was %r", builder, _builder)
+    old_builder = _builder
+    _builder = builder
+    return old_builder
+
+def get_builder():
+    return _builder
 
 
 # NOTE the lack of process safety - presumably we do not support
@@ -329,14 +346,14 @@ def skip_zip_header(bis):
         return False
 
 
-def do_build_jar(package_name, jar_name, clamped_modules, output_path):
+def build_jar(package_name, jar_name, clamped_modules, output_path):
     if output_path is None:
         jar_dir = init_jar_dir()
         output_path = os.path.join(jar_dir, jar_name)
         with JarPth() as paths:
             paths[package_name] = os.path.join("./jars", jar_name)
     with JarBuilder(output_path=output_path) as builder:
-        clamp.register_builder(builder)
+        register_builder(builder)
         for module in clamped_modules:
             __import__(module)
 

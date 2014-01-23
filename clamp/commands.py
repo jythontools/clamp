@@ -1,12 +1,15 @@
+import logging
 import os
 import os.path
 import setuptools
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
 
-from build import create_singlejar, do_build_jar
+from build import create_singlejar, build_jar
+
+log = logging.getLogger(__name__)
 
 
-def validate_clamp(distribution, keyword, values):
+def validate_clamp_keyword(distribution, keyword, values):
     if keyword != "clamp":
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
     try:
@@ -26,7 +29,7 @@ def validate_clamp(distribution, keyword, values):
     distribution.clamp = clamped
 
 
-class build_jar(setuptools.Command):
+class build_jar_command(setuptools.Command):
 
     description = "create a jar for all clamped Python classes for this package"
     user_options = [
@@ -51,11 +54,41 @@ class build_jar(setuptools.Command):
     def run(self):
         if not self.distribution.clamp:
             raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
-        do_build_jar(self.distribution.metadata.get_name(),
-                     self.get_jar_name(), self.distribution.clamp, self.output)
+        build_jar(self.distribution.metadata.get_name(),
+                  self.get_jar_name(), self.distribution.clamp, self.output)
 
 
-class singlejar(setuptools.Command):
+
+class clamp_command(setuptools.Command):
+
+    description = "create a jar for all clamped Python classes for this package"
+    user_options = [
+        ("output=",   "o", "write jar to output path"),
+    ]
+
+    def initialize_options(self):
+        self.output = None
+
+    def finalize_options(self):
+        if self.output is not None:
+            dir_path = os.path.split(self.output)[0]
+            if dir_path and not os.path.exists(dir_path):
+                raise DistutilsOptionError("Directory {} to write jar must exist".format(dir_path))
+            if os.path.splitext(self.output)[1] != ".jar":
+                raise DistutilsOptionError("Path must be to a valid jar name, not {}".format(self.output))
+
+    def get_jar_name(self):
+        metadata = self.distribution.metadata
+        return "{}-{}.jar".format(metadata.get_name(), metadata.get_version())
+
+    def run(self):
+        if not self.distribution.clamp:
+            raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
+        build_jar(self.distribution.metadata.get_name(),
+                  self.get_jar_name(), self.distribution.clamp, self.output)
+
+
+class singlejar_command(setuptools.Command):
 
     description = "create a singlejar of all Jython dependencies, including clamped jars"
     user_options = [
@@ -79,7 +112,7 @@ class singlejar(setuptools.Command):
         create_singlejar(self.output, self.classpath, self.runpy)
 
 
-def singlejar_command():
+def singlejar_script_command():
     parser = argparse.ArgumentParser(description="create a singlejar of all Jython dependencies, including clamped jars")
     parser.add_argument("--output", "-o", default="jython-single.jar", metavar="PATH",
                         help="write jar to output path")
