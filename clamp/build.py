@@ -353,7 +353,7 @@ def skip_zip_header(bis):
         return False
 
 
-def build_jar(package_name, jar_name, clamped_modules, output_path):
+def build_jar(package_name, jar_name, clamp_setup, output_path):
     if output_path is None:
         jar_dir = init_jar_dir()
         output_path = os.path.join(jar_dir, jar_name)
@@ -361,7 +361,7 @@ def build_jar(package_name, jar_name, clamped_modules, output_path):
             paths[package_name] = os.path.join("./jars", jar_name)
     with JarBuilder(output_path=output_path) as builder:
         with register_builder(builder):
-            for module in clamped_modules:
+            for module in clamp_setup.modules:
                 __import__(module)
 
 

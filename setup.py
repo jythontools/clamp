@@ -14,7 +14,7 @@ setup(
             "singlejar = clamp.commands:singlejar_command",
         ],
         "distutils.setup_keywords": [
-            "clamp = clamp.commands:validate_clamp_keyword",
+            "clamp = clamp.commands:parse_clamp_keyword",
         ],
         "console_scripts": [
             "singlejar = clamp.commands:singlejar_script_command",

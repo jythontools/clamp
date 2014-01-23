@@ -8,7 +8,7 @@ from distutils.errors import DistutilsOptionError, DistutilsSetupError
 from build import create_singlejar, build_jar
 
 logging.basicConfig()
-log = logging.getLogger("clamp") # __name__)
+log = logging.getLogger("clamp")
 
 
 @contextmanager
@@ -21,24 +21,34 @@ def honor_verbosity(verbose):
         log.setLevel(old_level)
 
 
-def validate_clamp_keyword(distribution, keyword, values):
+class ClampSetup(object):
+    
+    # FIXME include such things as excluded/included jars, etc
+
+    def __init__(self, modules):
+        self.modules = modules
+
+
+def parse_clamp_keyword(distribution, keyword, values):
+    print "distrib=%r,kw=%r,values=%r" % (distribution.clamp, keyword, values)
     if keyword != "clamp":
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
+    if "modules" not in values:
+        raise DistutilsSetupError("clamp keyword must specify modules: {}".format(keyword))
     try:
         invalid = []
-        clamped = list(distribution.clamp)
-        for v in clamped:
-            # FIXME test if valid module name too
+        clamped_modules = list(values["modules"])
+        for v in clamped_modules:
             if not isinstance(v, basestring):
                 invalid.append(v)
         if invalid:
             raise DistutilsSetupError(
-                "clamp={} is invalid, must be an iterable of importable module names".format(
+                "clamp.modules={} is invalid, must be an iterable of importable module names".format(
                     values))
     except TypeError, ex:
         log.error("Invalid clamp", exc_info=True)
         raise DistutilsSetupError("clamp={} is invalid: {}".format(values, ex))
-    distribution.clamp = clamped
+    distribution.clamp = ClampSetup(clamped_modules)
 
 
 class build_jar_command(setuptools.Command):
