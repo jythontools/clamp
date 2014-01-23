@@ -1,4 +1,8 @@
-import argparse
+# NOTE the obivious lack of support for simultaneous installs.  If in
+# fact we need to do this, implement an obvious advisory locking
+# scheme when writing files like jar.pth
+
+
 import glob
 import jarray
 import os
@@ -9,38 +13,38 @@ import time
 import logging
 
 from collections import OrderedDict
-from contextlib import closing  # FIXME need to merge in Java 7 support for AutoCloseable
+from contextlib import closing, contextmanager  # FIXME need to merge in Java 7 support for AutoCloseable
 from java.io import BufferedInputStream, FileInputStream
 from java.util.jar import Attributes, JarEntry, JarInputStream, JarOutputStream, Manifest
 from java.util.zip import ZipException, ZipInputStream
 
-
-import clamp  # FIXME change to relative path
-
 log = logging.getLogger(__name__)
 
 
-# FIXME maybe this should be supported with a context manager; we
-# could also do this in the context of a threadlocal; however, this is
-# currently just used by setup.py in an indirect fashion, so probably
-# OK
+class NullBuilder(object):
 
-_builder = None
+    def __repr__(self):
+        return "NullBuilder"
 
+    def write_class_bytes(self, package, classname, bytes):
+        pass
+
+
+_builder = NullBuilder = NullBuilder()
+
+
+@contextmanager
 def register_builder(builder):
     global _builder
     log.debug("Registering builder %r, old builder was %r", builder, _builder)
     old_builder = _builder
     _builder = builder
-    return old_builder
+    yield
+    _builder = old_builder
+
 
 def get_builder():
     return _builder
-
-
-# NOTE the lack of process safety - presumably we do not support
-# simultaneous installs.  If in fact we need to do this, implement
-# the obvious advisory locking scheme.
 
 
 # probably refactor in a class
@@ -257,11 +261,14 @@ class JarCopy(OutputJar):
 
 class JarBuilder(OutputJar):
 
-    def canonical_path_parts(self, package, classname):
+    def __repr__(self):
+        return "JarBuilder(output={!r})".format(self.output_path)
+
+    def _canonical_path_parts(self, package, classname):
         return tuple(classname.split("."))
 
-    def saveBytes(self, package, classname, bytes):
-        path_parts = self.canonical_path_parts(package, classname)
+    def write_class_bytes(self, package, classname, bytes):
+        path_parts = self._canonical_path_parts(package, classname)
         self.create_ancestry(path_parts)
         entry = JarEntry("/".join(path_parts) + ".class")
         entry.time = self.build_time
@@ -353,9 +360,9 @@ def build_jar(package_name, jar_name, clamped_modules, output_path):
         with JarPth() as paths:
             paths[package_name] = os.path.join("./jars", jar_name)
     with JarBuilder(output_path=output_path) as builder:
-        register_builder(builder)
-        for module in clamped_modules:
-            __import__(module)
+        with register_builder(builder):
+            for module in clamped_modules:
+                __import__(module)
 
 
 def create_singlejar(output_path, classpath, runpy):
