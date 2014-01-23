@@ -81,9 +81,7 @@ class SerializableProxyMaker(CustomMaker):
         code.return_()
 
     def saveBytes(self, bytes):
-        builder = get_builder()  # FIXME add a NullBuilder that simply does nothing
-        if builder:
-            builder.saveBytes(self.package, self.myClass, bytes)
+        get_builder().write_class_bytes(self.package, self.myClass, bytes)
 
     def makeClass(self):
         builder = get_builder()
