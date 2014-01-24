@@ -366,13 +366,14 @@ def build_jar(package_name, jar_name, clamp_setup, output_path=None):
 
 
 def get_included_jars(src_dir, packages):
+    prefix_length = len(src_dir)+1
     for package in packages:
         for dirpath, dirs, files in os.walk(os.path.join(src_dir, package)):
             for name in files:
-                _, ext = x = os.path.splitext(name)
+                _, ext = os.path.splitext(name)
                 if ext == ".jar":
                     path = os.path.join(dirpath, name)
-                    yield path[len(src_dir)+1:]
+                    yield path[prefix_length:]
 
 
 def copy_included_jars(package_name, packages, src_dir=None, dest_dir=None):
@@ -383,16 +384,13 @@ def copy_included_jars(package_name, packages, src_dir=None, dest_dir=None):
         src_dir = os.getcwd()
     if dest_dir is None:
         dest_dir = os.path.join(site.getsitepackages()[0], package_name)
-    print "src=%s, dest=%s" % (src_dir, dest_dir)
     jar_files = sorted(get_included_jars(src_dir, packages))
-    print "jar_files"
-    print jar_files
     distutils.dir_util.create_tree(dest_dir, jar_files)
     for jar_file in jar_files:
         distutils.file_util.copy_file(os.path.join(src_dir, jar_file), os.path.join(dest_dir, jar_file))
     with JarPth() as paths:
         for jar_file in jar_files:
-            paths[jar_file] = os.path.join(".", jar_file)
+            paths[jar_file] = os.path.join(".", package_name, jar_file)
             
             
 def create_singlejar(output_path, classpath, runpy):
