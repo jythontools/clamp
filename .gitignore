@@ -1,5 +1,9 @@
 *.pyc
 *.class
 *.jar
-*~
+*.tar.gz
+*.egg
 build/*
+clamp.egg-info/
+dist/*
+*~

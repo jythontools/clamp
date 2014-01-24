@@ -6,20 +6,22 @@ from setuptools import setup, find_packages
 
 setup(
     name = "clamp",
-    version = "0.3",
+    version = "0.4",
     packages = find_packages(),
     entry_points = {
         "distutils.commands": [
-            "build_jar = clamp.build:build_jar",
-            "singlejar = clamp.build:singlejar",
+            "build_jar = clamp.commands:build_jar_command",
+            "clamp = clamp.commands:clamp_command",
+            "singlejar = clamp.commands:singlejar_command",
         ],
         "distutils.setup_keywords": [
-            "clamp = clamp.build:validate_clamp",
+            "clamp = clamp.commands:parse_clamp_keyword",
         ],
         "console_scripts": [
-            "singlejar = clamp.build:singlejar_command",
+            "singlejar = clamp.commands:singlejar_script_command",
         ]
-    }
+    },
+    zip_safe = True
 )
 
 
