@@ -7,8 +7,8 @@ from org.python.core import Py
 from org.python.compiler import CustomMaker, ProxyCodeHelpers
 from org.python.util import CodegenUtils
 
-from build import get_builder
-from types import Constant
+from clamp.build import get_builder
+from clamp.signature import Constant
 
 
 log = logging.getLogger(__name__)

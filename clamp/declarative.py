@@ -1,8 +1,8 @@
 # Declarative should do all type inference, etc, in
 # ClampProxyMakerMeta (other than of course class decorator)
 
-from proxymaker import ClampProxyMaker
-from types import Constant
+from clamp.proxymaker import ClampProxyMaker
+from clamp.signature import Constant
 
 
 def clamp_base(package, proxy_maker=ClampProxyMaker):

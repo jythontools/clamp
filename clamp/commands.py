@@ -6,7 +6,7 @@ import setuptools
 from contextlib import contextmanager
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
 
-from build import create_singlejar, build_jar, copy_included_jars
+from clamp.build import create_singlejar, build_jar, copy_included_jars
 
 logging.basicConfig()
 log = logging.getLogger("clamp")
@@ -34,7 +34,6 @@ class ClampSetup(object):
 
 
 def parse_clamp_keyword(distribution, keyword, values):
-    print "distrib=%r,kw=%r,values=%r" % (distribution.clamp, keyword, values)
     if keyword != "clamp":
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
     if "modules" not in values:
