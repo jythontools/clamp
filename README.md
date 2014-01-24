@@ -1,18 +1,120 @@
-clamp
-=====
+Clamp background
+================
 
-Implements clamp in Python. Pre-alpha version - API subject to change.
+Clamp is part of the jythontools project
+(https://github.com/jythontools). Although Jython has already very
+integration with Java, Clamp improves this support by enabling precise
+generation of the Java bytecode used to wrap Python classes. In a
+nutshell, this means such clamped classes can be used as modern Java
+classes.
 
-You need to install. Soon this will be on PyPI, before then, in the checkout directory:
+Clamp integrates with setuptools. Clamped packages are installed into
+site-packages. Clamp can also take an entire Jython installation,
+including site-packages, and wrap it into a **single jar**.
+
+Clamp thereby provides the following benefits:
+
+* JVM frameworks can readily work with clamped code, oblivious of its
+  source
+
+* Especially those frameworks that need single jar support
+
+* Developers can stay as much in Python as possible. Note that Clamp
+  currently can only clamp Python classes that inherit from a Java
+  base class and/or extend Java interfaces.
+
+* We are working on a SQLAlchemy-like DSL that is declarative, using
+  metaclasses and other metaprogramming techniques.
+
+
+Clamp example: Clamped
+======================
+
+Please see the "Clamped" project on how to use this package. This
+project provides crucial documentation on how to use Clamp by going
+through an example in the README: https://github.com/jimbaker/clamped
+
+The [Clamped README][clamped] also details some aspects of the
+bytecode generation and how it enables direct Java usage.
+
+Lastly, there is a preliminary [talk][] on Clamp available
+([source][talk source]). Note that this talk goes more into the
+implementation of Clamp, including how we use metaprogramming.
+
+
+Important caveats
+=================
+
+Clamp is currently in a pre-alpha version, with its API subject to
+change. In particular, the argument structure for the setuptools clamp
+keyword recently changed, as of the 0.4 release. Clamp also recently
+went through a major refactoring to transform it from a useful spike
+to a production-ready package.
+
+You need to install Clamp from this github repo. You will also want to
+use the [jython-ssl branch][] for Jython 2.7, until the necessary SSL work
+lands in Jython trunk. Again, see the [Clamped project][clamped]
+for details on how to work with this branch.
+
+From the checkout directory:
 
 ````bash
 $ jython27 setup.py install
 ````
 
-Example project using this package; this provides crucial documentation on how to use Clamp by going through an example:
-https://github.com/jimbaker/clamped
+Soon this will be on PyPI, but this awaiting sufficient unit testing
+of Clamp.
 
-The clamp project supports setuptools integration.
+
+Integrated with setuptools
+--------------------------
+
+The clamp project supports setuptools integration. You simply need to
+add one keyword, `clamp`, as well as depend on the Clamp package:
+
+````python
+import ez_setup
+ez_setup.use_setuptools()
+
+from setuptools import setup, find_packages
+
+
+setup(
+    name = "clamped",
+    version = "0.1",
+    packages = find_packages(),
+    install_requires = ["clamp>=0.4"],
+    clamp = {
+        "modules": ["clamped"]},
+)
+````
+
+At a minimum, you need to specify the `modules` you wish to clamp.
+
+
+`clamp` command
+---------------
+
+This is a post-install task.
+
+The `clamp` command installs into site-packages any embedded
+jars. Modules that are specified and clamps any modules into a
+jar. All such jars are registered in jar.pth.
+
+````bash
+$ jython27 setup.py clamp
+````
+
+FIXME Layout considerations. Subject to change.
+
+FIXME Combining `clamp` with `install`. See http://www.niteoweb.com/blog/setuptools-run-custom-code-during-install
+for some ideas.
+
+
+`build_jar` command
+-------------------
+
+Not normally needed.
 
 To create a jar for a clamped module in site-packages/jars and
 register this new jar in site-packages/jar.pth:
@@ -21,7 +123,13 @@ register this new jar in site-packages/jar.pth:
 $ jython27 setup.py build_jar
 ````
 
-To create a single jar version of the current Jython installation (such as a virtualenv). This setup.py custom command will use the project name as the base for the jar:
+
+`singlejar` command
+-------------------
+
+To create a single jar version of the current Jython installation
+(such as a virtualenv). This setup.py custom command will use the
+project name as the base for the jar:
 
 ````bash
 $ jython27 setup.py singlejar
@@ -46,10 +154,6 @@ TODO
 
 * Provide basic support for annotations.
 
-* Extend setup.py support of install so that it can use build_jar; see
-  http://www.niteoweb.com/blog/setuptools-run-custom-code-during-install
-  for some ideas.
-
 * [Annotation magic](#supporting-java-annotations). It would be nice to import
   annotations into Python, use as class decorators and function
   decorators, and then still compile a Java class that works.
@@ -67,18 +171,17 @@ TODO
 * Map [Python descriptors][] to Java's convention of getters/setters. Note
   that `__delete__` is not a mappable idea!
 
-* Add external jar support with a new `jar` keyword in `setup.py` such
-  that any such referred jar can be placed in `site-packages` and
-  referred to by `jar.pth`. Current workaround: directly place in
-  site-packages and manually modify `jar.pth`.
+* Add support for resolving external jars with Maven.
 
-* Add support for resolving such external jars with Maven.
+* Standalone jar support in Jython itself does not currently support
+  `.pth` files and consequently `site-packages`. Clamp works around
+  this by packaging everything in `Lib/`, but this is not desirable
+  due to possible collisions. This means the possibility of subtle
+  changes in class loader resolution, compared to what Jython offers
+  with `sys.path`.
 
-* Standalone jar support in Jython does not currently support `.pth`
-  files and consequently `site-packages`. Clamp works around this by
-  packaging everything in `Lib/`, but this is not desirable due to
-  possible collisions. Also, it would be nice if jars in
-  `site-packages` could simply be included directly without unpacking.
+  Moreover, it would be nice if jars in `site-packages`
+  could simply be included directly without unpacking.
 
 * The `singlejar` command should generate Jython cache info on all
   included files and bundle in the generated uber jar. It's not clear
@@ -207,5 +310,9 @@ syntax equivalent.
 
   [AnnotationVisitor]: http://asm.ow2.org/asm40/javadoc/user/org/objectweb/asm/AnnotationVisitor.html
   [ASM user guide]: http://download.forge.objectweb.org/asm/asm4-guide.pdf
+  [clamped]: https://github.com/jimbaker/clamped
+  [jython-ssl branch]: https://bitbucket.org/jimbaker/jython-ssl
   [PEP 302]: http://www.python.org/dev/peps/pep-0302/
   [Python descriptors]: http://docs.python.org/2/howto/descriptor.html
+  [talk]: https://github.com/jimbaker/clamped/blob/master/talk.pdf
+  [talk source]: https://github.com/jimbaker/clamped/blob/master/talk.md
