@@ -5,19 +5,22 @@ import setuptools
 from contextlib import contextmanager
 from distutils.errors import DistutilsOptionError, DistutilsSetupError
 
-from build import create_singlejar, build_jar
+from build import create_singlejar, build_jar, copy_included_jars
 
 logging.basicConfig()
 log = logging.getLogger("clamp")
 
 
+# FIXME should support dry run functionality
+
+
 @contextmanager
 def honor_verbosity(verbose):
-    if verbose:
+    if verbose > 1:
         old_level = log.getEffectiveLevel()
         log.setLevel(logging.DEBUG)
     yield
-    if verbose:
+    if verbose > 1:
         log.setLevel(old_level)
 
 
@@ -35,6 +38,7 @@ def parse_clamp_keyword(distribution, keyword, values):
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
     if "modules" not in values:
         raise DistutilsSetupError("clamp keyword must specify modules: {}".format(keyword))
+    distribution.zip_safe = False  # given the use of jars
     try:
         invalid = []
         clamped_modules = list(values["modules"])
@@ -84,21 +88,14 @@ class build_jar_command(setuptools.Command):
 
 class clamp_command(setuptools.Command):
 
-    description = "create a jar for all clamped Python classes for this package"
-    user_options = [
-        ("output=",   "o", "write jar to output path"),
-    ]
+    description = "create a clamped package"
+    user_options = []
 
     def initialize_options(self):
-        self.output = None
+        pass
 
     def finalize_options(self):
-        if self.output is not None:
-            dir_path = os.path.split(self.output)[0]
-            if dir_path and not os.path.exists(dir_path):
-                raise DistutilsOptionError("Directory {} to write jar must exist".format(dir_path))
-            if os.path.splitext(self.output)[1] != ".jar":
-                raise DistutilsOptionError("Path must be to a valid jar name, not {}".format(self.output))
+        pass
 
     def get_jar_name(self):
         metadata = self.distribution.metadata
@@ -109,7 +106,8 @@ class clamp_command(setuptools.Command):
             if not self.distribution.clamp:
                 raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
             build_jar(self.distribution.metadata.get_name(),
-                      self.get_jar_name(), self.distribution.clamp, self.output)
+                      self.get_jar_name(), self.distribution.clamp)
+            copy_included_jars(self.distribution.metadata.get_name(), self.distribution.packages)
 
 
 class singlejar_command(setuptools.Command):
