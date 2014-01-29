@@ -354,6 +354,7 @@ def skip_zip_header(bis):
 
 
 def build_jar(package_name, jar_name, clamp_setup, output_path=None):
+    update_jar_pth = not(output_path)
     if output_path is None:
         jar_dir = init_jar_dir()
         output_path = os.path.join(jar_dir, jar_name)
@@ -377,7 +378,7 @@ def build_jar(package_name, jar_name, clamp_setup, output_path=None):
             for module in clamp_setup.modules:
                 __import__(module)
 
-    if output_path is None:
+    if update_jar_pth:
         with JarPth() as paths:
             paths[package_name] = os.path.join("./jars", jar_name)
 
