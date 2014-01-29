@@ -357,12 +357,29 @@ def build_jar(package_name, jar_name, clamp_setup, output_path=None):
     if output_path is None:
         jar_dir = init_jar_dir()
         output_path = os.path.join(jar_dir, jar_name)
-        with JarPth() as paths:
-            paths[package_name] = os.path.join("./jars", jar_name)
+        # Remove the old jar (if present) to prevent from being imported.
+        #
+        # Note that it will still be scanned by SysPackageManager,
+        # because that happens before any user-level Python code (like
+        # this module) can be run. This will be addressed when the
+        # build preemptively creates such package cache data.
+        try:
+            sys.path.remove(output_path)
+        except ValueError:
+            pass
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+
     with JarBuilder(output_path=output_path) as builder:
         with register_builder(builder):
             for module in clamp_setup.modules:
                 __import__(module)
+
+    if output_path is None:
+        with JarPth() as paths:
+            paths[package_name] = os.path.join("./jars", jar_name)
 
 
 def get_included_jars(src_dir, packages):
