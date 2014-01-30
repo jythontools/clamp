@@ -395,9 +395,8 @@ def get_included_jars(src_dir, packages):
 
 
 def copy_included_jars(package_name, packages, src_dir=None, dest_dir=None):
-    # FIXME dest_dir should presumably be something like
-    # clamped-0.1-py2.7.egg, not clamped
-    # but this still might not work - eggs IIRC are protective of what they contain
+    # FIXME ideally dest_dir would be the corresponding egg, but this requires additional work
+    # so that setuptools will not remove upon subsequent runs of setuptool commands
     if src_dir is None:
         src_dir = os.getcwd()
     if dest_dir is None:
@@ -409,6 +408,7 @@ def copy_included_jars(package_name, packages, src_dir=None, dest_dir=None):
     with JarPth() as paths:
         for jar_file in jar_files:
             paths[jar_file] = os.path.join(".", package_name, jar_file)
+    return [os.path.join(dest_dir, jar_file) for jar_file in jar_files]
             
             
 def create_singlejar(output_path, classpath, runpy):
