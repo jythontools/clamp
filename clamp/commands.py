@@ -84,16 +84,9 @@ class build_jar_command(setuptools.Command):
                       self.get_jar_name(), self.distribution.clamp, self.output)
 
 
-class clamp_command(setuptools.Command):
+class clamp_command(install):
 
-    description = "create a clamped package"
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
+    description = "install required jars"
 
     def get_jar_name(self):
         metadata = self.distribution.metadata
@@ -112,8 +105,19 @@ class clamp_command(setuptools.Command):
                     print "Adding jar to sys.path", path
                     sys.path.append(path)  # make these jars are available
 
-            # 2. Compile Python classes, which presumably depend on these included jars (if any)
-            self.run_command("install")
+            # 2. Compile Python classes, which likely depend on included jars
+            def run_commands():
+                def run_commands2():
+                    install.run(self)
+                run_commands2()
+        
+            # This stack logic plus resetting the apparent module
+            # works around the "slightly kludgy, but seems to work"
+            # (!)  logic that has setuptools figure out whether it
+            # should use the legacy-supporting .egg-info or use
+            # .egg. We want the latter, hence this workaround.
+            run_commands.func_globals["__name__"] = "distutils.dist"
+            run_commands()
 
             # 3. Building the jar relies on both included jars and Python classes
             build_jar(self.distribution.metadata.get_name(),
@@ -159,3 +163,52 @@ def singlejar_script_command():
     else:
         args.classpath = []
     create_singlejar(args.output, args.classpath, args.runpy)
+
+
+
+# FIXME
+class install_pre(setuptools.Command):
+
+    description = "preinstall"
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        print "*********preinstall"
+
+
+class install_post(setuptools.Command):
+
+    description = "postinstall"
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        print "*********postinstall"
+
+
+
+class my_install(install):
+    def run(self):
+        print "I would like to install some stuff before"
+        install.run(self)
+        print "I would like to install some stuff afterwards"
+
+#print "Modifying installation to use my_install..."
+#distutils.core.setup(..., cmdclass=dict(install=my_install), ...)
+
+
+#install.sub_commands.insert(0, ('install_pre', lambda self: True))
+#install.sub_commands.append(('install_post', lambda self: True))
+
+#print "Subcommands installed", install.sub_commands
