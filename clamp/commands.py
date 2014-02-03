@@ -104,22 +104,14 @@ class clamp_command(install):
                     print "Adding jar to sys.path", path
                     sys.path.append(path)  # make these jars are available
 
-            # 2. Compile Python classes, which may depend on included jars
-            def run_commands():
-                def run_commands2():
-                    install.run(self)
-                run_commands2()
-        
-            # NB: This stack logic plus resetting the apparent module
-            # mirrors and thus works around the "slightly kludgy, but
-            # seems to work" (!)  frame inspection logic that
-            # setuptools uses to determine whether it should use the
-            # legacy-supporting .egg-info or use .egg.
+            # 2. Compile Python classes, which may depend on included jars.
             #
-            # We want the latter to be built, hence this workaround.
-
-            run_commands.func_globals["__name__"] = "distutils.dist"
-            run_commands()
+            # Use the underlying do_egg_install, which is invoked by
+            # install.run in setuptools if it detects it is not in
+            # legacy mode (using "slightly kludgy, but seems to work"
+            # (!)  frame inspection logic). We want to install an egg,
+            # which supports pth, not legacy-supporting .egg-info.
+            self.do_egg_install()
 
             # 3. Building clamped jar relies on both included jars and Python classes
             build_jar(self.distribution.metadata.get_name(),
