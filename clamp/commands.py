@@ -3,16 +3,14 @@ import logging
 import os
 import os.path
 import setuptools
+import sys
 from contextlib import contextmanager
-from distutils.errors import DistutilsOptionError, DistutilsSetupError
+from setuptools.command.install import install
 
 from clamp.build import create_singlejar, build_jar, copy_included_jars
 
 logging.basicConfig()
 log = logging.getLogger("clamp")
-
-
-# FIXME should support dry run functionality
 
 
 @contextmanager
@@ -85,17 +83,9 @@ class build_jar_command(setuptools.Command):
                       self.get_jar_name(), self.distribution.clamp, self.output)
 
 
+class clamp_command(install):
 
-class clamp_command(setuptools.Command):
-
-    description = "create a clamped package"
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
+    description = "install required jars, run usual install, and clamp modules into jar"
 
     def get_jar_name(self):
         metadata = self.distribution.metadata
@@ -105,9 +95,27 @@ class clamp_command(setuptools.Command):
         with honor_verbosity(self.distribution.verbose):
             if not self.distribution.clamp:
                 raise DistutilsOptionError("Specify the modules to be built into a jar  with the 'clamp' setup keyword")
+
+            # 1. Ensure any included jars are immediately available
+            available_paths = set(sys.path)
+            jar_paths = copy_included_jars(self.distribution.metadata.get_name(), self.distribution.packages)
+            for path in jar_paths:
+                if path not in available_paths:
+                    print "Adding jar to sys.path", path
+                    sys.path.append(path)  # make these jars are available
+
+            # 2. Compile Python classes, which may depend on included jars.
+            #
+            # Use the underlying do_egg_install, which is invoked by
+            # install.run in setuptools if it detects it is not in
+            # legacy mode (using "slightly kludgy, but seems to work"
+            # (!)  frame inspection logic). We want to install an egg,
+            # which supports pth, not legacy-supporting .egg-info.
+            self.do_egg_install()
+
+            # 3. Building clamped jar relies on both included jars and Python classes
             build_jar(self.distribution.metadata.get_name(),
                       self.get_jar_name(), self.distribution.clamp)
-            copy_included_jars(self.distribution.metadata.get_name(), self.distribution.packages)
 
 
 class singlejar_command(setuptools.Command):
