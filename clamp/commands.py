@@ -1,5 +1,4 @@
 import argparse
-import distutils
 import logging
 import os
 import os.path
