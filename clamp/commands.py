@@ -86,7 +86,7 @@ class build_jar_command(setuptools.Command):
 
 class clamp_command(install):
 
-    description = "install required jars"
+    description = "install required jars, run usual install, and clamp modules into jar"
 
     def get_jar_name(self):
         metadata = self.distribution.metadata
@@ -163,52 +163,3 @@ def singlejar_script_command():
     else:
         args.classpath = []
     create_singlejar(args.output, args.classpath, args.runpy)
-
-
-
-# FIXME
-class install_pre(setuptools.Command):
-
-    description = "preinstall"
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        print "*********preinstall"
-
-
-class install_post(setuptools.Command):
-
-    description = "postinstall"
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        print "*********postinstall"
-
-
-
-class my_install(install):
-    def run(self):
-        print "I would like to install some stuff before"
-        install.run(self)
-        print "I would like to install some stuff afterwards"
-
-#print "Modifying installation to use my_install..."
-#distutils.core.setup(..., cmdclass=dict(install=my_install), ...)
-
-
-#install.sub_commands.insert(0, ('install_pre', lambda self: True))
-#install.sub_commands.append(('install_post', lambda self: True))
-
-#print "Subcommands installed", install.sub_commands
