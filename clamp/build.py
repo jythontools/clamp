@@ -255,13 +255,18 @@ class JarCopy(OutputJar):
             with closing(BufferedInputStream(f)) as bis:
                 output_entry = JarEntry(relpath)
                 output_entry.time = os.path.getmtime(path) * 1000
-                self.jar.putNextEntry(output_entry)
-                while True:
-                    read = bis.read(chunk, 0, 8192)
-                    if read == -1:
-                        break
-                    self.jar.write(chunk, 0, read)
-        self.jar.closeEntry()
+                try:
+                    self.jar.putNextEntry(output_entry)
+                    while True:
+                        read = bis.read(chunk, 0, 8192)
+                        if read == -1:
+                            break
+                        self.jar.write(chunk, 0, read)
+                    self.jar.closeEntry()
+                except ZipException, e:
+                    if not "duplicate entry" in str(e):
+                        log.error("Problem in creating entry %r", entry, exc_info=True)
+                        raise
 
 
 class JarBuilder(OutputJar):
@@ -437,6 +442,17 @@ def create_singlejar(output_path, classpath, runpy):
             
         sitepackage = site.getsitepackages()[0]
 
+        # copy top level packages
+        for item in os.listdir(sitepackage):
+            path = os.path.join(sitepackage, item)
+            if path.endswith(".egg") or path.endswith(".egg-info") or path.endswith(".pth") or path == "jars":
+                continue
+            log.debug("Copying package %s", path)
+            for pkg_relpath, pkg_realpath in find_package_libs(path):
+                log.debug("Copy package file %s %s", pkg_relpath, pkg_realpath)
+                singlejar.copy_file(os.path.join("Lib", item, pkg_relpath), pkg_realpath)
+
+        # copy eggs
         for path in read_pth(os.path.join(sitepackage, "easy-install.pth")).itervalues():
             relpath = "/".join(os.path.normpath(os.path.join("Lib", path)).split(os.sep))  # ZIP only uses /
             path = os.path.realpath(os.path.normpath(os.path.join(sitepackage, path)))
@@ -445,7 +461,7 @@ def create_singlejar(output_path, classpath, runpy):
                 log.debug("Copying %s (zipped file)", path)  # tiny lie - already copied, but keeping consistent!
                 continue
 
-            log.debug("Copying %s", path)
+            log.debug("Copying egg %s", path)
             for pkg_relpath, pkg_realpath in find_package_libs(path):
                 # Filter out egg metadata
                 parts = pkg_relpath.split(os.sep)
