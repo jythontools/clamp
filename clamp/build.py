@@ -212,6 +212,11 @@ class JarCopy(OutputJar):
                     name = "/".join([parent, entry.name])
                 else:
                     name = entry.name
+                if name.startswith("META-INF/") and name.endswith(".SF"):
+                    # Skip signature files - by their nature, they do
+                    # not work when their source jars are copied
+                    log.debug("Skipping META-INF signature file %s", name)
+                    continue
                 output_entry = JarEntry(name)
                 output_entry.time = entry.time
                 self.jar.putNextEntry(output_entry)
