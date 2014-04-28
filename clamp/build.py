@@ -465,8 +465,6 @@ def create_singlejar(output_path, classpath, runpy):
             for pkg_relpath, pkg_realpath in find_package_libs(path):
                 # Filter out egg metadata
                 parts = pkg_relpath.split(os.sep)
-                if len(parts) < 2:
-                    continue
                 head = parts[0]
                 if head == "EGG-INFO" or head.endswith(".egg-info"):
                     continue
