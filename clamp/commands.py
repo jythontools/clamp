@@ -5,6 +5,7 @@ import os.path
 import setuptools
 import sys
 from contextlib import contextmanager
+from distutils.errors import DistutilsOptionError, DistutilsSetupError
 from setuptools.command.install import install
 
 from clamp.build import create_singlejar, build_jar, copy_included_jars
@@ -35,7 +36,8 @@ def parse_clamp_keyword(distribution, keyword, values):
     if keyword != "clamp":
         raise DistutilsSetupError("invalid keyword: {}".format(keyword))
     if "modules" not in values:
-        raise DistutilsSetupError("clamp keyword must specify modules: {}".format(keyword))
+        raise DistutilsSetupError(
+            "clamp={!r} is invalid: no 'modules' key present".format(values))
     distribution.zip_safe = False  # given the use of jars
     try:
         invalid = []
@@ -45,11 +47,11 @@ def parse_clamp_keyword(distribution, keyword, values):
                 invalid.append(v)
         if invalid:
             raise DistutilsSetupError(
-                "clamp.modules={} is invalid, must be an iterable of importable module names".format(
+                "clamp={!r} is invalid: 'modules' key must be an iterable of importable module names".format(
                     values))
     except TypeError, ex:
         log.error("Invalid clamp", exc_info=True)
-        raise DistutilsSetupError("clamp={} is invalid: {}".format(values, ex))
+        raise DistutilsSetupError("clamp={!r} is invalid: {}".format(values, ex))
     distribution.clamp = ClampSetup(clamped_modules)
 
 
