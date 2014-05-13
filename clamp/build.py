@@ -297,7 +297,11 @@ def find_jython_jars():
     elif os.path.exists(jython_jar_path):
         jars = [jython_jar_path]
     else:
-        raise Exception("Cannot find jython jar")
+        try:
+            from org.python.util import jython
+            jars = [jython().getClass().getProtectionDomain().getCodeSource().getLocation().getPath()]
+        except:
+            raise Exception("Cannot find jython jar")
     return jars
 
 
