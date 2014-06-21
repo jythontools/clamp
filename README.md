@@ -218,7 +218,7 @@ $ jython27 setup.py build_jar
 
 Use the `singlejar` command to create a single jar version of the
 current Jython installation. (This will include virtualenv
-environments, but note that virtualenv support for Jythjon 2.7 needs
+environments, but note that virtualenv support for Jython 2.7 needs
 some additional work. If you are building Jython from source at this
 time, just use that directory for now.) This setup.py custom command
 will use the project name as the base for the jar:
