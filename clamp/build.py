@@ -254,7 +254,7 @@ class JarCopy(OutputJar):
         with open(path) as f:
             with closing(BufferedInputStream(f)) as bis:
                 output_entry = JarEntry(relpath)
-                output_entry.time = os.path.getmtime(path) * 1000
+                output_entry.time = int(os.path.getmtime(path) * 1000)
                 try:
                     self.jar.putNextEntry(output_entry)
                     while True:
