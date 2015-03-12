@@ -2,11 +2,10 @@ Clamp background
 ================
 
 Clamp is part of the jythontools project
-(https://github.com/jythontools). Although Jython has already very
-integration with Java, Clamp improves this support by enabling precise
-generation of the Java bytecode used to wrap Python classes. In a
-nutshell, this means such clamped classes can be used as modern Java
-classes.
+(https://github.com/jythontools). Although Jython integrates well with
+Java, Clamp improves this support by enabling precise generation of
+the Java bytecode used to wrap Python classes. In a nutshell, this
+means such clamped classes can be used as modern Java classes.
 
 Clamp integrates with setuptools. Clamped packages are installed into
 site-packages. Clamp can also take an entire Jython installation,
@@ -14,17 +13,19 @@ including site-packages, and wrap it into a **single jar**.
 
 Clamp thereby provides the following benefits:
 
-* JVM frameworks can readily work with clamped code, oblivious of its
-  source
+* JVM frameworks and containers can readily work with clamped code,
+  oblivious of its source
 
-* Especially those frameworks that need single jar support
+* This is especially true of those frameworks that need single jar
+  support
 
-* Developers can stay as much in Python as possible. Note that Clamp
-  currently can only clamp Python classes that inherit from a Java
-  base class and/or extend Java interfaces.
+* Developers can stay as much in Python as possible. Clamp
+  simply requires that any clamped Python classes inherit from a Java base class
+  and/or extend Java interfaces. We may relax this restriction in the future.
 
-* We are working on a SQLAlchemy-like DSL that is declarative, using
-  metaclasses and other metaprogramming techniques.
+* Clamp uses a SQLAlchemy-like DSL that is declarative, using
+  metaclasses and other metaprogramming techniques. We also plan to
+  extend this DSL substantially in the future.
 
 
 Clamp example: Clamped
@@ -38,7 +39,7 @@ https://github.com/jimbaker/clamped
 The [Clamped README][clamped] also details some aspects of the
 bytecode generation and how it enables direct Java usage.
 
-Lastly, there is a preliminary [talk][] on Clamp available
+Lastly, there is a [talk][] on Clamp available
 ([source][talk source]). Note that this talk goes more into the
 implementation of Clamp, including how we use metaprogramming.
 
@@ -46,31 +47,50 @@ implementation of Clamp, including how we use metaprogramming.
 Important caveats
 =================
 
-Clamp is currently in a pre-alpha version, with its API subject to
-change. In particular, the argument structure for the setuptools clamp
-keyword recently changed, as of the 0.4 release. Clamp also recently
-went through a major refactoring to transform it from a useful spike
-to a production-ready package.
+Clamp has proven to be useful in production environments, but it needs
+additional work before we can announce a finalized, stable release
+(a 1.0 in other words). In particular, it should be possible to run
+Clamp on Windows environments. In addition, we need a robust test
+suite, in addition to the functional testing we are doing by
+hand. Once we have such a test suite, we plan to post on PyPI.
 
-You need to install Clamp from this github repo. You will also want to
-use the [jython-ssl branch][] for Jython 2.7, until the necessary SSL work
-lands in Jython trunk. Again, see the [Clamped project][clamped]
-for details on how to work with this branch.
+Expect to see more updates once we complete the release of
+Jython 2.7.0, which has been keeping us from spending more time on
+this project.
 
-From the checkout directory:
+
+Usage
+=====
+
+Installation
+------------
+
+Start by installing Jython 2.7. Clamp does not currently work on Windows, so the
+most recent beta 4 will work for you. Get it at the
+[Jython website][]. You will want to bootstrap pip (this next step
+will be part of the Jython installer by the final release):
 
 ````bash
-$ jython27 setup.py install
+$ jython -m ensurepip
 ````
 
-Soon this will be on PyPI, but this awaiting sufficient unit testing
-of Clamp.
+With this step, the pip command is now available in
+`$JYTHON_HOME/bin/pip`. You may want to alias `$JYTHON_HOME/bin/pip`
+as `jpip`, or you can use [pyenv][] to use it alongside CPython's
+pip. Your choice. In the example below, we use `jpip` to keep it
+unambiguous which one you are using:
+
+````bash
+jpip install git+https://github.com/jythontools/clamp.git
+````
+
+Now Clamp is installed.
 
 
-Integrated with setuptools
---------------------------
+Setuptools integration
+----------------------
 
-The clamp project supports setuptools integration. You simply need to
+The clamp project uses setuptools integration. You simply need to
 add one keyword, `clamp`, as well as depend on the Clamp package:
 
 ````python
@@ -84,7 +104,7 @@ setup(
     name = "clamped",
     version = "0.1",
     packages = find_packages(),
-    install_requires = ["clamp>=0.4"],
+    install_requires = ["clamp"],
     clamp = {
         "modules": ["clamped"]
     }
@@ -101,9 +121,10 @@ Example clamped class
 ---------------------
 
 Your class (currently) needs to implement Java interfaces and/or
-extend a Java class - this inheritance scheme ensures that Java can
-work with your clamped class. Your clamped class also needs to be
-imported by one of the modules you specified with `clamp.modules`.
+extend a Java class - this inheritance scheme ensures that Java code
+knows how to use your clamped class. Your clamped class also needs to
+be imported by one of the modules you specified with `clamp.modules`,
+so that Clamp can generate the necessary proxy bytecode.
 
 Your class also needs to use a base class generated by `clamp_base` to
 provide the mapping to a specific Java package namespace. You can
@@ -421,9 +442,10 @@ syntax equivalent.
   [AnnotationVisitor]: http://asm.ow2.org/asm40/javadoc/user/org/objectweb/asm/AnnotationVisitor.html
   [ASM user guide]: http://download.forge.objectweb.org/asm/asm4-guide.pdf
   [clamped]: https://github.com/jimbaker/clamped
-  [jython-ssl branch]: https://bitbucket.org/jimbaker/jython-ssl
+  [Jython website]: http://www.jython.org/
   [Paver project]: http://pythonhosted.org/Paver/
   [PEP 302]: http://www.python.org/dev/peps/pep-0302/
+  [pyenv]: https://github.com/yyuu/pyenv
   [Python descriptors]: http://docs.python.org/2/howto/descriptor.html
   [talk]: https://github.com/jimbaker/clamped/blob/master/talk.pdf
   [talk source]: https://github.com/jimbaker/clamped/blob/master/talk.md
